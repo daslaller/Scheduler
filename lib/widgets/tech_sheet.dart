@@ -407,36 +407,42 @@ class _WeekBars extends StatelessWidget {
         border: Border.all(color: Wb.line2),
       ),
       child: Row(
-        crossAxisAlignment: CrossAxisAlignment.end,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           for (var k = 0; k < 7; k++)
             Expanded(
               child: Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 4.5),
                 child: Column(
-                  mainAxisAlignment: MainAxisAlignment.end,
                   children: [
                     Text(
                       values[k] == 0 ? '—' : values[k].toStringAsFixed(1),
                       style: Wb.code(size: 9.5, weight: FontWeight.w500, color: Wb.muted2),
                     ),
-                    const SizedBox(height: 6),
-                    Container(
-                      width: double.infinity,
-                      height: (values[k] / 10 * 54).clamp(3, 54),
-                      decoration: BoxDecoration(
-                        color: values[k] > 8
-                            ? Wb.accent
-                            : values[k] > 0
-                                ? Wb.coverageGreen
-                                : Wb.line2,
-                        borderRadius: const BorderRadius.vertical(
-                          top: Radius.circular(4),
-                          bottom: Radius.circular(2),
+                    const SizedBox(height: 4),
+                    Expanded(
+                      child: Align(
+                        alignment: Alignment.bottomCenter,
+                        child: FractionallySizedBox(
+                          widthFactor: 1,
+                          heightFactor: values[k] <= 0 ? 0.08 : (values[k] / 10).clamp(0.08, 1),
+                          child: DecoratedBox(
+                            decoration: BoxDecoration(
+                              color: values[k] > 8
+                                  ? Wb.accent
+                                  : values[k] > 0
+                                      ? Wb.coverageGreen
+                                      : Wb.line2,
+                              borderRadius: const BorderRadius.vertical(
+                                top: Radius.circular(4),
+                                bottom: Radius.circular(2),
+                              ),
+                            ),
+                          ),
                         ),
                       ),
                     ),
-                    const SizedBox(height: 6),
+                    const SizedBox(height: 4),
                     Text(
                       days[k],
                       style: Wb.code(
