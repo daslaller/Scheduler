@@ -4,19 +4,24 @@ import 'controller.dart';
 import 'models.dart';
 import 'theme.dart';
 import 'widgets/chrome.dart';
+import 'self_page.dart';
 import 'widgets/month_overlay.dart';
 import 'widgets/tech_sheet.dart';
 import 'widgets/timeline.dart';
 
 class WorkbenchPage extends StatefulWidget {
-  const WorkbenchPage({super.key});
+  const WorkbenchPage({super.key, this.controller});
+
+  /// Injected by the screenshot harness so a shot can be taken of a *state* —
+  /// the self view, a chosen day — rather than only of the app's first frame.
+  final SchedulerController? controller;
 
   @override
   State<WorkbenchPage> createState() => _WorkbenchPageState();
 }
 
 class _WorkbenchPageState extends State<WorkbenchPage> {
-  final ctrl = SchedulerController();
+  late final ctrl = widget.controller ?? SchedulerController();
 
   @override
   void initState() {
@@ -37,7 +42,9 @@ class _WorkbenchPageState extends State<WorkbenchPage> {
             backgroundColor: Wb.ink,
             behavior: SnackBarBehavior.floating,
             margin: const EdgeInsets.all(18),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(Wb.rLg)),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(Wb.rLg),
+            ),
             content: Text(msg, style: Wb.ui(size: 13, color: Wb.onPrimary)),
           ),
         );
@@ -55,7 +62,39 @@ class _WorkbenchPageState extends State<WorkbenchPage> {
   @override
   Widget build(BuildContext context) {
     final date = ctrl.date;
-    final title = '${kDayNames[date.weekday % 7]} ${ctrl.day} ${kMonNames[ctrl.month]}';
+    final title =
+        '${kDayNames[date.weekday % 7]} ${ctrl.day} ${kMonNames[ctrl.month]}';
+
+    // The self view is the same data seen as one person's — a mode of this
+    // page rather than its own route, so the controller, the month modal and
+    // the fixtures are shared rather than duplicated.
+    if (ctrl.selfView) {
+      return Scaffold(
+        backgroundColor: Wb.page,
+        body: SafeArea(
+          child: SingleChildScrollView(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(22, 14, 22, 0),
+                  child: Row(
+                    children: [
+                      WbPill(
+                        label: 'Back to the bench',
+                        leading: const Text('←'),
+                        onTap: () => ctrl.showSelf(false),
+                      ),
+                    ],
+                  ),
+                ),
+                SelfPage(ctrl: ctrl, index: 0),
+              ],
+            ),
+          ),
+        ),
+      );
+    }
 
     return Scaffold(
       backgroundColor: Wb.page,
@@ -65,7 +104,9 @@ class _WorkbenchPageState extends State<WorkbenchPage> {
             child: SelectionArea(
               child: LayoutBuilder(
                 builder: (context, constraints) {
-                  final width = constraints.maxWidth < 1180 ? 1180.0 : constraints.maxWidth;
+                  final width = constraints.maxWidth < 1180
+                      ? 1180.0
+                      : constraints.maxWidth;
                   return SingleChildScrollView(
                     scrollDirection: Axis.horizontal,
                     child: SizedBox(
@@ -91,7 +132,6 @@ class _WorkbenchPageState extends State<WorkbenchPage> {
           ),
           if (ctrl.sheetIndex != null)
             Positioned.fill(child: TechSheet(ctrl: ctrl)),
-          if (ctrl.monthOpen) MonthOverlay(ctrl: ctrl),
         ],
       ),
     );
@@ -127,9 +167,10 @@ class _Header extends StatelessWidget {
                   color: const Color(0x1C2563EB),
                   borderRadius: BorderRadius.circular(9),
                 ),
-                child: const Text(
-                  '✦',
-                  style: TextStyle(fontSize: 15, color: Wb.primary, height: 1),
+                child: const Icon(
+                  Icons.handyman_outlined,
+                  size: 17,
+                  color: Wb.primary,
                 ),
               ),
               const SizedBox(width: 12),
@@ -158,31 +199,60 @@ class _Header extends StatelessWidget {
                 const SizedBox(width: 7),
                 WbCircleBtn(glyph: '→', onTap: ctrl.nextDay),
                 const SizedBox(width: 10),
-                Text(
-                  'Week 35 · ${ctrl.clockedCount} technicians clocked in',
-                  style: Wb.ui(size: 11.5, color: Wb.muted2),
+                Flexible(
+                  child: Text(
+                    'Week 35 · ${ctrl.clockedCount} technicians clocked in',
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: Wb.ui(size: 11.5, color: Wb.muted2),
+                  ),
                 ),
               ],
             ),
           ),
+          // ⚠️ **`runSpacing`, and the trailing caption is `Flexible`.** The
+          // fourth pill pushed the header past the page's own 1180 minimum
+          // and it overflowed by 93px — an action falling off the right edge,
+          // which is the failure a screenshot catches and a green
+          // `flutter analyze` cannot. (A `Flexible` here would do nothing: a
+          // `Wrap` has no flex to give, which is its own small lesson.)
           Padding(
             padding: const EdgeInsets.only(bottom: 6),
             child: Wrap(
               spacing: 9,
+              runSpacing: 8,
+              alignment: WrapAlignment.end,
               children: [
                 WbPill(
                   label: 'Copy last week',
-                  leading: const Text('⧉'),
+                  // ⚠️ **Material icons, not exotic glyphs.** `⧉ ▦ ☰ ＋ ✕ ✦`
+                  // have no coverage in Inter and Flutter does not
+                  // substitute, so every one of them rendered as a **tofu
+                  // box** — visible only in a screenshot, and only once
+                  // somebody looked at it.
+                  leading: const Icon(Icons.copy_all_outlined, size: 14),
                   onTap: ctrl.copyWeek,
                 ),
                 WbPill(
                   label: 'Month overlay',
                   peach: true,
-                  leading: const Text('▦'),
-                  onTap: ctrl.openMonth,
+                  leading: const Icon(
+                    Icons.calendar_view_month_outlined,
+                    size: 15,
+                  ),
+                  // A modal now: the route owns Escape, the back button and
+                  // the scrim, and the self view can open the same one.
+                  onTap: () => showMonthOverlay(context, ctrl: ctrl),
                 ),
                 WbPill(
-                  label: ctrl.approved ? '4 sheets approved' : 'Approve 4 sheets',
+                  label: 'My schedule',
+                  leading: const Icon(Icons.person_outline, size: 15),
+                  onTap: () => ctrl.showSelf(true),
+                ),
+                WbPill(
+                  label: ctrl.approved
+                      ? '4 sheets approved'
+                      : 'Approve 4 sheets',
                   filled: true,
                   leading: const Text('✓'),
                   onTap: ctrl.approve,
@@ -220,10 +290,15 @@ class _KpiStrip extends StatelessWidget {
                   child: Container(
                     decoration: BoxDecoration(
                       color: Wb.cream,
-                      border: i == 0 ? null : const Border(left: BorderSide(color: Wb.line)),
+                      border: i == 0
+                          ? null
+                          : const Border(left: BorderSide(color: Wb.line)),
                     ),
                     padding: const EdgeInsets.fromLTRB(17, 13, 17, 13),
-                    child: _Kpi(stat: stats[i], bar: ctrl.statBarWidth(stats[i])),
+                    child: _Kpi(
+                      stat: stats[i],
+                      bar: ctrl.statBarWidth(stats[i]),
+                    ),
                   ),
                 ),
             ],
@@ -249,7 +324,10 @@ class _Kpi extends StatelessWidget {
             Container(
               width: 9,
               height: 9,
-              decoration: BoxDecoration(color: stat.dot, borderRadius: BorderRadius.circular(3)),
+              decoration: BoxDecoration(
+                color: stat.dot,
+                borderRadius: BorderRadius.circular(3),
+              ),
             ),
             const SizedBox(width: 7),
             Text(stat.label, style: Wb.kicker(size: 10, tracking: 0.15)),
@@ -264,7 +342,10 @@ class _Kpi extends StatelessWidget {
               const SizedBox(width: 6),
               Padding(
                 padding: const EdgeInsets.only(bottom: 5),
-                child: Text(stat.unit, style: Wb.ui(size: 12, color: Wb.muted2)),
+                child: Text(
+                  stat.unit,
+                  style: Wb.ui(size: 12, color: Wb.muted2),
+                ),
               ),
             ],
           ],
@@ -286,7 +367,20 @@ class _Kpi extends StatelessWidget {
               ),
             ),
             const SizedBox(width: 8),
-            Text(stat.sub, style: Wb.ui(size: 11, color: Wb.muted2)),
+            // ⚠️ **Flexible, because these sentences got longer.** The tiles
+            // used to say "within limits"; they now say "+18.2h still
+            // running" and "no clock-out — the hours are a guess", which is
+            // the whole improvement and also 93px more than the tile had. A
+            // sentence that carries the meaning has to be allowed to wrap.
+            Flexible(
+              child: Text(
+                stat.sub,
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+                textAlign: TextAlign.right,
+                style: Wb.ui(size: 11, color: Wb.muted2),
+              ),
+            ),
           ],
         ),
       ],

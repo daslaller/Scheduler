@@ -27,7 +27,10 @@ void main() {
     c.nudge(0, inSide: false, delta: -0.5);
     expect(c.clockOf(0).outHour, 18.5);
     c.nudge(0, inSide: true, delta: 20);
-    expect(c.clockOf(0).outHour - c.clockOf(0).inHour, greaterThanOrEqualTo(0.5));
+    expect(
+      c.clockOf(0).outHour - c.clockOf(0).inHour,
+      greaterThanOrEqualTo(0.5),
+    );
   });
 
   test('day meta marks weekday crews as at least three technicians', () {
@@ -35,11 +38,63 @@ void main() {
     expect(wed.crewN, greaterThanOrEqualTo(3));
   });
 
-  test('default clocked hours sum across the bench', () {
+  test('settled and still-running hours are kept apart', () {
+    // ⚠️ The rule the whole feature turns on: adding them is what a
+    // four-column timesheet does, and it is how a forgotten punch reaches
+    // payroll as an ordinary number that grew all weekend.
     final c = SchedulerController();
-    expect(c.totalHours, 42.5);
+    final split = c.payableSplit;
+    expect(split.open, greaterThan(0), reason: 'somebody has not clocked out');
+    expect(split.settled + split.open, closeTo(c.totalHours, 0.001));
     expect(c.capacity, 59.5);
-    expect(c.overtimeHours, 0.5);
+  });
+
+  test('a shift you are standing in is not a fix', () {
+    final c = SchedulerController();
+    // Two clocks are open; only the one nobody could still be standing in is
+    // an alarm. Counting today's live clock-in is how the tile stops being
+    // read by lunchtime on the first day.
+    expect(c.liveCount, 1);
+    expect(c.forgottenCount, 1);
+    expect(c.clockOf(4).live, isTrue);
+    expect(c.clockOf(3).forgotten, isTrue);
+  });
+
+  test('only a punch may widen the day window', () {
+    // An open run's end is a *cap*, not a punch. Counted as evidence, one
+    // forgotten clock-out puts the board on a 24-hour axis and squashes every
+    // real shift to a third of its width.
+    final wide = DayWindow.of(const [
+      ClockHours(inHour: 9, outHour: 17, breakAt: 0),
+      ClockHours(inHour: 10, outHour: 23.5, breakAt: 0, open: true),
+    ]);
+    expect(wide.end, lessThanOrEqualTo(17));
+    expect(wide.start, 9);
+  });
+
+  test('a day with nothing punched falls back rather than collapsing', () {
+    final empty = DayWindow.of(const <ClockHours>[]);
+    expect(empty.start, kDayStart);
+    expect(empty.end, kDayEnd);
+  });
+
+  test('the month projects onto one technician unchanged', () {
+    // What lets the self view reuse the admin month rather than fork it.
+    final all = dayMeta(7, 5);
+    final mine = onlyTech(all, 0);
+    expect(mine.perTech.length, all.perTech.length);
+    expect(mine.hours, all.perTech[0]);
+    expect(mine.crewN, all.perTech[0] > 0 ? 1 : 0);
+    for (var i = 1; i < mine.perTech.length; i++) {
+      expect(mine.perTech[i], 0);
+    }
+  });
+
+  test('a hairline is snapped to the pixel grid', () {
+    // Skia spreads a 1px line at a fractional x across two columns at half
+    // strength each, which reads as blur rather than as a fainter line.
+    expect(crispLine(290.4), 290.5);
+    expect(crispLine(12.0), 12.5);
   });
 
   testWidgets('workbench renders the workshop title and KPIs', (tester) async {
@@ -52,7 +107,7 @@ void main() {
     await tester.pump();
     expect(find.textContaining('Northline Device Repair'), findsOneWidget);
     expect(find.text('Monday 24 August'), findsOneWidget);
-    expect(find.text('Clocked hours'), findsOneWidget);
+    expect(find.text('On the bench'), findsOneWidget);
     expect(find.text('Alex Kim (you)'), findsOneWidget);
     expect(find.text('BENCH COVERAGE'), findsOneWidget);
   });

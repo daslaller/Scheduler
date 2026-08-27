@@ -16,7 +16,6 @@ class SchedulerController extends ChangeNotifier {
   TimelineView view = TimelineView.clock;
   int? sheetIndex;
   SheetTab sheetTab = SheetTab.clock;
-  bool monthOpen = false;
   MonthMode monthMode = MonthMode.hours;
   bool approved = false;
   String? flash;
@@ -26,22 +25,75 @@ class SchedulerController extends ChangeNotifier {
   int get lastDay => daysInMonth(month);
   double get capacity => workers.length * 8.5;
 
+  /// Who has not clocked out, and when they clocked **in**.
+  ///
+  /// Index 4 clocked in this morning and is on shift now. Index 3 clocked in
+  /// yesterday evening — a negative hour, i.e. before this day's midnight —
+  /// and nobody ever closed it.
+  ///
+  /// ⚠️ **Both are `open`; only elapsed time separates them**, which is the
+  /// whole point. A fixture where every shift is settled cannot show the
+  /// distinction the board is built to draw, and a fixture where the
+  /// "forgotten" one started this morning is not forgotten at all — it is
+  /// somebody at the counter.
+  static const _openIn = {3: kNowHour - 20, 4: 10.0};
+
   ClockHours clockOf(int i) {
     final w = workers[i];
     final o = _clocks[i];
+    // A nudged clock is a clock somebody has stated, so it closes.
+    final open = o == null && _openIn.containsKey(i);
     return ClockHours(
-      inHour: o?.inHour ?? w.clockIn,
-      outHour: o?.outHour ?? w.clockOut,
-      breakAt: w.breakAt,
+      inHour: open ? _openIn[i]! : (o?.inHour ?? w.clockIn),
+      // ⚠️ An open shift's end is a **cap at now**, not a punch: what the
+      // clock had reached when the board was read.
+      outHour: open ? kNowHour : (o?.outHour ?? w.clockOut),
+      breakAt: open ? 0 : w.breakAt,
+      open: open,
     );
   }
 
+  /// The day's window, derived — see [DayWindow].
+  DayWindow get window => DayWindow.of(List.generate(workers.length, clockOf));
+
+  /// **Settled and still-running, apart.**
+  ///
+  /// ⚠️ Adding them is what a four-column timesheet does, and it is how a
+  /// forgotten Friday punch reaches payroll as an ordinary number that grew
+  /// all weekend. Every surface that shows a total shows these two.
+  ({double settled, double open}) get payableSplit {
+    var settled = 0.0, running = 0.0;
+    for (var i = 0; i < workers.length; i++) {
+      final c = clockOf(i);
+      if (c.open) {
+        running += c.paid;
+      } else {
+        settled += c.paid;
+      }
+    }
+    return (settled: settled, open: running);
+  }
+
+  /// Shifts nobody clocked out of **and nobody is standing in**.
+  ///
+  /// A shift you are standing in is not a fix: counting today's live clock-in
+  /// as a problem is how the alarm stops being read by lunchtime on the first
+  /// day.
+  int get forgottenCount =>
+      List.generate(workers.length, clockOf).where((c) => c.forgotten).length;
+
+  int get liveCount =>
+      List.generate(workers.length, clockOf).where((c) => c.live).length;
+
   List<RepairJob> jobsOf(int i) => repairJobsFor(i, day, clockOf(i).inHour);
 
-  double get totalHours =>
-      List.generate(workers.length, clockOf).fold<double>(0, (a, c) => a + c.paid);
+  double get totalHours => List.generate(
+    workers.length,
+    clockOf,
+  ).fold<double>(0, (a, c) => a + c.paid);
 
-  double get overtimeHours => List.generate(workers.length, clockOf).fold<double>(0, (a, c) {
+  double get overtimeHours =>
+      List.generate(workers.length, clockOf).fold<double>(0, (a, c) {
         final extra = c.paid - 8;
         return extra > 0 ? a + extra : a;
       });
@@ -62,14 +114,22 @@ class SchedulerController extends ChangeNotifier {
   List<StatTile> get stats {
     final cap = capacity;
     final total = totalHours;
-    final ot = overtimeHours;
     final util = (total / cap * 100).round();
+    final split = payableSplit;
+    final forgotten = forgottenCount;
+    final live = liveCount;
     return [
+      // ⚠️ **Settled, with the running hours named beside it — never added
+      // in.** A single "clocked hours" figure is what a four-column timesheet
+      // prints, and it is how a forgotten punch reaches payroll as an
+      // ordinary number that grew all weekend.
       StatTile(
-        label: 'Clocked hours',
-        value: total.toStringAsFixed(1),
+        label: 'On the bench',
+        value: split.settled.toStringAsFixed(1),
         unit: 'hours',
-        sub: 'of ${cap.toStringAsFixed(0)}h capacity',
+        sub: split.open == 0
+            ? 'all of it clocked out of'
+            : '+${split.open.toStringAsFixed(1)}h still running',
         dot: Wb.teal,
         bar: Wb.teal,
       ),
@@ -81,14 +141,21 @@ class SchedulerController extends ChangeNotifier {
         dot: Wb.forest,
         bar: Wb.forest,
       ),
+      // ⚠️ **A shift somebody is standing in is not a fix.** Counting every
+      // open clock puts today's live one in the alarm tile, which is how the
+      // tile stops being read by lunchtime on the first day.
       StatTile(
-        label: 'Overtime',
-        value: ot.toStringAsFixed(1),
-        unit: 'hours',
-        sub: ot > 0 ? '2 techs past 8h' : 'within limits',
+        label: 'Unconfirmed',
+        value: '$forgotten',
+        unit: forgotten == 1 ? 'shift' : 'shifts',
+        sub: forgotten > 0
+            ? 'no clock-out — the hours are a guess'
+            : live > 0
+            ? 'nothing forgotten · $live still running'
+            : 'every shift clocked out of',
         dot: Wb.accent,
         bar: Wb.accent,
-        valueColor: ot > 0 ? Wb.accent : null,
+        valueColor: forgotten > 0 ? Wb.accent : null,
       ),
       StatTile(
         label: 'Billable labour',
@@ -110,9 +177,10 @@ class SchedulerController extends ChangeNotifier {
   }
 
   List<int> coverageBusy() {
-    final n = (kDaySpan * 2).round();
+    final w = window;
+    final n = (w.span * 2).round();
     return List<int>.generate(n, (k) {
-      final h = kDayStart + k / 2;
+      final h = w.start + k / 2;
       var busy = 0;
       for (var i = 0; i < workers.length; i++) {
         final c = clockOf(i);
@@ -178,16 +246,6 @@ class SchedulerController extends ChangeNotifier {
     notifyListeners();
   }
 
-  void openMonth() {
-    monthOpen = true;
-    notifyListeners();
-  }
-
-  void closeMonth() {
-    monthOpen = false;
-    notifyListeners();
-  }
-
   void setMonthMode(MonthMode m) {
     monthMode = m;
     notifyListeners();
@@ -209,7 +267,16 @@ class SchedulerController extends ChangeNotifier {
 
   void pickDay(int d) {
     day = d;
-    monthOpen = false;
+    sheetIndex = null;
+    notifyListeners();
+  }
+
+  /// Which page is on screen. The self view is the same data seen as one
+  /// person's, so it is a mode of this controller rather than its own.
+  bool selfView = false;
+
+  void showSelf(bool v) {
+    selfView = v;
     sheetIndex = null;
     notifyListeners();
   }
