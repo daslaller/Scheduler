@@ -15,7 +15,7 @@ class MonthOverlay extends StatelessWidget {
   Widget build(BuildContext context) {
     if (!ctrl.monthOpen) return const SizedBox.shrink();
     final dim = ctrl.lastDay;
-    final metas = {for (var d = 1; d <= dim; d++) d: dayMeta(ctrl.month, d)};
+    final metas = {for (var d = 1; d <= dim; d++) d: dayMeta(ctrl.month, d, technicianCount: ctrl.technicians.length)};
     final all = metas.values.toList();
     final monthHours = all.fold<double>(0, (a, m) => a + m.hours);
     final monthOt = all.fold<double>(0, (a, m) => a + m.ot);
@@ -24,7 +24,7 @@ class MonthOverlay extends StatelessWidget {
     final mode = ctrl.monthMode;
     final offset = monthStartOffset(ctrl.month);
     final weekCount = ((offset + dim) / 7).ceil();
-    final cap = workers.length * 8.5;
+    final cap = ctrl.technicians.length * 8.5;
 
     String hint;
     switch (mode) {
@@ -426,7 +426,7 @@ class _DayCell extends StatelessWidget {
                             color: m.perTech[x] > 8
                                 ? Wb.accent
                                 : m.perTech[x] > 0
-                                    ? workers[x].tint.withValues(
+                                    ? ctrl.technicians[x].tint.withValues(
                                         alpha: mode == MonthMode.crew ? 0.8 : 0.4,
                                       )
                                     : Wb.hair,
@@ -452,16 +452,16 @@ class _DayCell extends StatelessWidget {
                         alignment: Alignment.center,
                         decoration: BoxDecoration(
                           shape: BoxShape.circle,
-                          color: workers[x].tint.withValues(alpha: 0.15),
+                          color: ctrl.technicians[x].tint.withValues(alpha: 0.15),
                           border: Border.all(color: selected ? Wb.peach : Wb.cream, width: 1.5),
                         ),
                         child: Text(
-                          workers[x].initial[0],
+                          ctrl.technicians[x].initial[0],
                           style: TextStyle(
                             fontFamily: Wb.sans,
                             fontSize: 8.5,
                             fontWeight: FontWeight.w700,
-                            color: workers[x].tint,
+                            color: ctrl.technicians[x].tint,
                             height: 1,
                           ),
                         ),

@@ -9,14 +9,15 @@ import 'widgets/tech_sheet.dart';
 import 'widgets/timeline.dart';
 
 class WorkbenchPage extends StatefulWidget {
-  const WorkbenchPage({super.key});
+  const WorkbenchPage({super.key, required this.ctrl});
+  final SchedulerController ctrl;
 
   @override
   State<WorkbenchPage> createState() => _WorkbenchPageState();
 }
 
 class _WorkbenchPageState extends State<WorkbenchPage> {
-  final ctrl = SchedulerController();
+  SchedulerController get ctrl => widget.ctrl;
 
   @override
   void initState() {
@@ -24,31 +25,11 @@ class _WorkbenchPageState extends State<WorkbenchPage> {
     ctrl.addListener(_onChange);
   }
 
-  void _onChange() {
-    setState(() {});
-    if (ctrl.flash != null) {
-      final msg = ctrl.flash!;
-      ctrl.clearFlash();
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (!mounted) return;
-        ScaffoldMessenger.of(context).hideCurrentSnackBar();
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            backgroundColor: Wb.ink,
-            behavior: SnackBarBehavior.floating,
-            margin: const EdgeInsets.all(18),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(Wb.rLg)),
-            content: Text(msg, style: Wb.ui(size: 13, color: Wb.onPrimary)),
-          ),
-        );
-      });
-    }
-  }
+  void _onChange() => setState(() {});
 
   @override
   void dispose() {
     ctrl.removeListener(_onChange);
-    ctrl.dispose();
     super.dispose();
   }
 
@@ -137,7 +118,7 @@ class _Header extends StatelessWidget {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
-                    'Northline Device Repair — Workshop 02',
+                    ctrl.workshopName,
                     style: Wb.kicker(size: 10.5, tracking: 0.16),
                   ),
                   const SizedBox(height: 3),

@@ -1,18 +1,49 @@
+import 'dart:async';
+
 import 'package:flutter/foundation.dart';
 
 import 'models.dart';
 import 'theme.dart';
+import 'toast.dart';
 
 class ClockOverride {
   const ClockOverride({required this.inHour, required this.outHour});
   final double inHour, outHour;
 }
 
-class SchedulerController extends ChangeNotifier {
-  SchedulerController();
+/// Host-facing scheduler state. Share one instance across RepairX routes so
+/// POS / ticket clock-in updates the bench calendar (and the reverse).
+class RxSchedulerController extends ChangeNotifier implements RxToastSource {
+  RxSchedulerController({
+    List<Technician>? technicians,
+    DateTime Function()? now,
+    DateTime? initialDate,
+    this.workshopName = 'Northline Device Repair — Workshop 02',
+    bool seedOnTheClock = true,
+  })  : technicians = List.unmodifiable(technicians ?? kDemoTechnicians),
+        now = now ?? _demoNow {
+    final seed = initialDate ?? this.now();
+    day = seed.day;
+    month = seed.month - 1;
+    if (seedOnTheClock) {
+      final h = hourFromDateTime(this.now());
+      for (final t in this.technicians) {
+        if (h >= t.clockIn && h < t.clockOut) {
+          _onClock.add(t.id);
+        }
+      }
+    }
+  }
+
+  /// Demo "now" matches the mockup: 1:45p on Monday 24 August 2026.
+  static DateTime _demoNow() => DateTime(kYear, 8, 24, 13, 45);
+
+  final List<Technician> technicians;
+  final DateTime Function() now;
+  final String workshopName;
 
   int day = 24;
-  int month = 7; // August
+  int month = 7;
   TimelineView view = TimelineView.clock;
   int? sheetIndex;
   SheetTab sheetTab = SheetTab.clock;
@@ -21,13 +52,36 @@ class SchedulerController extends ChangeNotifier {
   bool approved = false;
   String? flash;
   final Map<int, ClockOverride> _clocks = {};
+  final Set<String> _onClock = {};
+
+  final _clockEvents = StreamController<ClockEvent>.broadcast(sync: true);
+  final _toasts = StreamController<RxToastMessage>.broadcast(sync: true);
+
+  @override
+  Stream<RxToastMessage> get toasts => _toasts.stream;
+
+  /// Clock in/out punches for other RepairX screens to listen to.
+  Stream<ClockEvent> get clockEvents => _clockEvents.stream;
 
   DateTime get date => DateTime(kYear, month + 1, day);
   int get lastDay => daysInMonth(month);
-  double get capacity => workers.length * 8.5;
+  double get capacity => technicians.length * 8.5;
+  double get nowHour => hourFromDateTime(now());
+
+  int? indexOf(String technicianId) {
+    final i = technicians.indexWhere((t) => t.id == technicianId);
+    return i < 0 ? null : i;
+  }
+
+  Technician technicianAt(int i) => technicians[i];
+
+  Technician? technicianById(String id) {
+    final i = indexOf(id);
+    return i == null ? null : technicians[i];
+  }
 
   ClockHours clockOf(int i) {
-    final w = workers[i];
+    final w = technicians[i];
     final o = _clocks[i];
     return ClockHours(
       inHour: o?.inHour ?? w.clockIn,
@@ -36,19 +90,30 @@ class SchedulerController extends ChangeNotifier {
     );
   }
 
+  ClockHours? hoursFor(String technicianId) {
+    final i = indexOf(technicianId);
+    return i == null ? null : clockOf(i);
+  }
+
+  /// Live punch state. Independent of the shift bar on the calendar.
+  bool isOnTheClock(String technicianId) => _onClock.contains(technicianId);
+
+  /// Technician ids currently punched in.
+  Set<String> get onTheClockIds => Set.unmodifiable(_onClock);
+
   List<RepairJob> jobsOf(int i) => repairJobsFor(i, day, clockOf(i).inHour);
 
   double get totalHours =>
-      List.generate(workers.length, clockOf).fold<double>(0, (a, c) => a + c.paid);
+      List.generate(technicians.length, clockOf).fold<double>(0, (a, c) => a + c.paid);
 
-  double get overtimeHours => List.generate(workers.length, clockOf).fold<double>(0, (a, c) {
+  double get overtimeHours => List.generate(technicians.length, clockOf).fold<double>(0, (a, c) {
         final extra = c.paid - 8;
         return extra > 0 ? a + extra : a;
       });
 
   double get billable {
     var sum = 0.0;
-    for (var i = 0; i < workers.length; i++) {
+    for (var i = 0; i < technicians.length; i++) {
       for (final j in jobsOf(i)) {
         sum += j.duration * j.rate;
       }
@@ -57,7 +122,7 @@ class SchedulerController extends ChangeNotifier {
   }
 
   int get clockedCount =>
-      List.generate(workers.length, clockOf).where((c) => c.paid > 0).length;
+      List.generate(technicians.length, clockOf).where((c) => c.paid > 0).length;
 
   List<StatTile> get stats {
     final cap = capacity;
@@ -114,7 +179,7 @@ class SchedulerController extends ChangeNotifier {
     return List<int>.generate(n, (k) {
       final h = kDayStart + k / 2;
       var busy = 0;
-      for (var i = 0; i < workers.length; i++) {
+      for (var i = 0; i < technicians.length; i++) {
         final c = clockOf(i);
         if (h >= c.inHour && h < c.outHour) busy++;
       }
@@ -136,6 +201,107 @@ class SchedulerController extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// Clock this technician in at [at] (defaults to [now]). Safe to call from
+  /// any RepairX screen that holds this controller.
+  ClockResult clockIn(String technicianId, {DateTime? at, bool silent = false}) {
+    final i = indexOf(technicianId);
+    if (i == null) {
+      return _fail('Unknown technician', silent: silent);
+    }
+    final tech = technicians[i];
+    if (isOnTheClock(technicianId)) {
+      return _fail('${_shortName(tech.name)} is already on the clock', silent: silent);
+    }
+    final punch = at ?? now();
+    final h = hourFromDateTime(punch).clamp(kDayStart, kDayEnd - 0.5);
+    final existing = clockOf(i);
+    var out = existing.outHour;
+    if (out <= h) out = (h + 8).clamp(h + 0.5, kDayEnd);
+    _clocks[i] = ClockOverride(inHour: h, outHour: out);
+    _onClock.add(technicianId);
+    final hours = clockOf(i);
+    final event = ClockEvent(
+      technicianId: technicianId,
+      technicianName: tech.name,
+      action: ClockAction.clockIn,
+      at: punch,
+      hours: hours,
+    );
+    return _ok(
+      event,
+      title: '${_shortName(tech.name)} clocked in',
+      detail: formatHour(h),
+      kind: RxToastKind.success,
+      silent: silent,
+    );
+  }
+
+  /// Clock this technician out at [at] (defaults to [now]).
+  ClockResult clockOut(String technicianId, {DateTime? at, bool silent = false}) {
+    final i = indexOf(technicianId);
+    if (i == null) {
+      return _fail('Unknown technician', silent: silent);
+    }
+    final tech = technicians[i];
+    if (!isOnTheClock(technicianId)) {
+      return _fail('${_shortName(tech.name)} is not on the clock', silent: silent, kind: RxToastKind.warning);
+    }
+    final punch = at ?? now();
+    final h = hourFromDateTime(punch).clamp(kDayStart + 0.5, kDayEnd);
+    final existing = clockOf(i);
+    var out = h;
+    if (out - existing.inHour < 0.5) out = existing.inHour + 0.5;
+    _clocks[i] = ClockOverride(inHour: existing.inHour, outHour: out);
+    _onClock.remove(technicianId);
+    final hours = clockOf(i);
+    final event = ClockEvent(
+      technicianId: technicianId,
+      technicianName: tech.name,
+      action: ClockAction.clockOut,
+      at: punch,
+      hours: hours,
+    );
+    final ot = hours.overtime ? ' · ${hours.paid.toStringAsFixed(1)}h overtime' : '';
+    return _ok(
+      event,
+      title: '${_shortName(tech.name)} clocked out',
+      detail: '${formatHour(existing.inHour)}–${formatHour(out)} · ${hours.paid.toStringAsFixed(1)}h$ot',
+      kind: hours.overtime ? RxToastKind.warning : RxToastKind.info,
+      silent: silent,
+    );
+  }
+
+  ClockResult _fail(
+    String message, {
+    required bool silent,
+    RxToastKind kind = RxToastKind.danger,
+  }) {
+    if (!silent) _emitToast(RxToastMessage(title: message, kind: kind));
+    return ClockResult(ok: false, message: message);
+  }
+
+  ClockResult _ok(
+    ClockEvent event, {
+    required String title,
+    String? detail,
+    required RxToastKind kind,
+    required bool silent,
+  }) {
+    _clockEvents.add(event);
+    if (!silent) {
+      _emitToast(RxToastMessage(title: title, detail: detail, kind: kind));
+    }
+    notifyListeners();
+    return ClockResult(ok: true, message: title, event: event);
+  }
+
+  void _emitToast(RxToastMessage message) {
+    flash = message.title;
+    _toasts.add(message);
+  }
+
+  String _shortName(String name) => name.split(' (').first;
+
   void prevDay() {
     if (day <= 1) return;
     day -= 1;
@@ -151,8 +317,9 @@ class SchedulerController extends ChangeNotifier {
   }
 
   void today() {
-    day = 24;
-    month = 7;
+    final n = now();
+    day = n.day;
+    month = n.month - 1;
     sheetIndex = null;
     notifyListeners();
   }
@@ -216,20 +383,49 @@ class SchedulerController extends ChangeNotifier {
 
   void copyWeek() {
     sheetIndex = null;
-    flash = 'Copied last week onto this bench';
+    _emitToast(
+      const RxToastMessage(
+        title: 'Copied last week onto this bench',
+        kind: RxToastKind.info,
+      ),
+    );
     notifyListeners();
   }
 
   void approve() {
     approved = true;
-    flash = '4 timesheets approved';
+    _emitToast(
+      const RxToastMessage(
+        title: '4 timesheets approved',
+        kind: RxToastKind.success,
+      ),
+    );
     notifyListeners();
   }
 
   void clearFlash() => flash = null;
 
+  /// Push a toast through the same overlay [RxToastHost] listens to.
+  void showToast(
+    String title, {
+    String? detail,
+    RxToastKind kind = RxToastKind.info,
+  }) {
+    _emitToast(RxToastMessage(title: title, detail: detail, kind: kind));
+  }
+
   List<double> weekLoad(int i) {
     final paid = clockOf(i).paid;
     return [6.5, 8, 8.5, 9.5, paid, 7, 0];
   }
+
+  @override
+  void dispose() {
+    _clockEvents.close();
+    _toasts.close();
+    super.dispose();
+  }
 }
+
+/// @nodoc
+typedef SchedulerController = RxSchedulerController;

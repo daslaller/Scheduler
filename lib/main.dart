@@ -1,20 +1,43 @@
 import 'package:flutter/material.dart';
 
+import 'controller.dart';
+import 'rx_scheduler.dart';
 import 'theme.dart';
-import 'workbench_page.dart';
+import 'toast.dart';
 
 void main() {
   WidgetsFlutterBinding.ensureInitialized();
-  runApp(const NorthlineApp());
+  runApp(const RxSchedulerDemoApp());
 }
 
-class NorthlineApp extends StatelessWidget {
-  const NorthlineApp({super.key});
+/// Standalone demo host. RepairX should own [RxSchedulerController]
+/// at the app (or session) level instead of this widget — see INTEGRATION.md.
+class RxSchedulerDemoApp extends StatefulWidget {
+  const RxSchedulerDemoApp({super.key});
+
+  @override
+  State<RxSchedulerDemoApp> createState() => _RxSchedulerDemoAppState();
+}
+
+class _RxSchedulerDemoAppState extends State<RxSchedulerDemoApp> {
+  late final RxSchedulerController controller;
+
+  @override
+  void initState() {
+    super.initState();
+    controller = RxSchedulerController();
+  }
+
+  @override
+  void dispose() {
+    controller.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'Northline Schedule',
+      title: 'RepairX Scheduler',
       debugShowCheckedModeBanner: false,
       theme: ThemeData(
         useMaterial3: true,
@@ -24,6 +47,7 @@ class NorthlineApp extends StatelessWidget {
           onPrimary: Wb.onPrimary,
           surface: Wb.cream,
           onSurface: Wb.ink,
+          error: Wb.accent,
         ),
         fontFamily: Wb.sans,
         snackBarTheme: SnackBarThemeData(
@@ -31,7 +55,13 @@ class NorthlineApp extends StatelessWidget {
           contentTextStyle: Wb.ui(size: 13, color: Wb.onPrimary),
         ),
       ),
-      home: const WorkbenchPage(),
+      builder: (context, child) {
+        return RxToastHost(
+          controller: controller,
+          child: child ?? const SizedBox.shrink(),
+        );
+      },
+      home: RxScheduler(controller: controller),
     );
   }
 }

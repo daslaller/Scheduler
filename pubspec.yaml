@@ -1,7 +1,7 @@
-name: northline_schedule
-description: Northline Device Repair bench scheduler — Flutter recreation of the Schedule Calendar UI mockup.
+name: rx_scheduler
+description: Drop-in RepairX bench scheduler — clock in/out API, overlay toasts, and the Workbench calendar widget.
 publish_to: "none"
-version: 1.0.0+1
+version: 1.1.0+1
 
 environment:
   sdk: ^3.13.1

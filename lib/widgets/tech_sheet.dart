@@ -13,7 +13,7 @@ class TechSheet extends StatelessWidget {
   Widget build(BuildContext context) {
     final i = ctrl.sheetIndex;
     if (i == null) return const SizedBox.shrink();
-    final w = workers[i];
+    final w = ctrl.technicians[i];
     final clock = ctrl.clockOf(i);
     final jobs = ctrl.jobsOf(i);
     final week = ctrl.weekLoad(i);
@@ -77,6 +77,15 @@ class TechSheet extends StatelessWidget {
                                     '${w.role} · ${w.cert}',
                                     style: Wb.kicker(size: 10, tracking: 0.12),
                                   ),
+                                  const SizedBox(height: 6),
+                                  Text(
+                                    ctrl.isOnTheClock(w.id) ? 'On the clock' : 'Off the clock',
+                                    style: Wb.ui(
+                                      size: 11,
+                                      weight: FontWeight.w600,
+                                      color: ctrl.isOnTheClock(w.id) ? Wb.forest : Wb.muted2,
+                                    ),
+                                  ),
                                 ],
                               ),
                             ),
@@ -134,6 +143,34 @@ class TechSheet extends StatelessWidget {
                             value: formatHour(clock.outHour),
                             onMinus: () => ctrl.nudge(i, inSide: false, delta: -0.5),
                             onPlus: () => ctrl.nudge(i, inSide: false, delta: 0.5),
+                          ),
+                          const SizedBox(height: 12),
+                          Row(
+                            children: [
+                              Expanded(
+                                child: WbPill(
+                                  label: 'Clock in',
+                                  expand: true,
+                                  onTap: () => ctrl.clockIn(w.id),
+                                ),
+                              ),
+                              const SizedBox(width: 9),
+                              Expanded(
+                                child: WbPill(
+                                  label: 'Clock out',
+                                  filled: true,
+                                  expand: true,
+                                  onTap: () => ctrl.clockOut(w.id),
+                                ),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 10),
+                          Text(
+                            ctrl.isOnTheClock(w.id)
+                                ? 'Punched in — clock out here or from POS'
+                                : 'Punched out — clock in here or from POS',
+                            style: Wb.ui(size: 11, color: Wb.muted2, height: 1.35),
                           ),
                           const SizedBox(height: 18),
                           Text('Week load', style: Wb.kicker(size: 10, tracking: 0.13)),

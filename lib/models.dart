@@ -53,22 +53,28 @@ JobTone toneOf(JobKind k) => switch (k) {
       JobKind.diag => JobTones.diag,
     };
 
-class Worker {
-  const Worker({
+/// A bench technician. [id] is the stable key other apps use for clock in/out.
+class Technician {
+  const Technician({
+    required this.id,
     required this.name,
     required this.role,
     required this.initial,
     required this.cert,
     required this.tint,
-    required this.clockIn,
-    required this.clockOut,
-    required this.breakAt,
+    this.clockIn = 9,
+    this.clockOut = 17,
+    this.breakAt = 0,
   });
 
+  final String id;
   final String name, role, initial, cert;
   final Color tint;
   final double clockIn, clockOut, breakAt;
 }
+
+/// @nodoc
+typedef Worker = Technician;
 
 class JobSeed {
   const JobSeed({
@@ -135,8 +141,10 @@ class StatTile {
   final Color? valueColor;
 }
 
-const workers = [
-  Worker(
+/// Demo crew used when the host does not pass technicians.
+const kDemoTechnicians = <Technician>[
+  Technician(
+    id: 'ak',
     name: 'Alex Kim (you)',
     role: 'Lead Tech',
     initial: 'AK',
@@ -146,7 +154,8 @@ const workers = [
     clockOut: 19,
     breakAt: 16,
   ),
-  Worker(
+  Technician(
+    id: 'pr',
     name: 'Priya Raman',
     role: 'Micro-solder',
     initial: 'PR',
@@ -156,7 +165,8 @@ const workers = [
     clockOut: 16.5,
     breakAt: 12,
   ),
-  Worker(
+  Technician(
+    id: 'rm',
     name: 'Rufus Mbeki',
     role: 'Screen Bench',
     initial: 'RM',
@@ -166,7 +176,8 @@ const workers = [
     clockOut: 17,
     breakAt: 13,
   ),
-  Worker(
+  Technician(
+    id: 'tl',
     name: 'Tobias Lund',
     role: 'Diagnostics',
     initial: 'TL',
@@ -176,7 +187,8 @@ const workers = [
     clockOut: 17,
     breakAt: 14.5,
   ),
-  Worker(
+  Technician(
+    id: 'bh',
     name: 'Benjamin Hale',
     role: 'Apprentice',
     initial: 'BH',
@@ -186,7 +198,8 @@ const workers = [
     clockOut: 13,
     breakAt: 0,
   ),
-  Worker(
+  Technician(
+    id: 'nc',
     name: 'Nina Castel',
     role: 'QC / Intake',
     initial: 'NC',
@@ -196,7 +209,8 @@ const workers = [
     clockOut: 14,
     breakAt: 11.5,
   ),
-  Worker(
+  Technician(
+    id: 'tb',
     name: 'Tom Braddock',
     role: 'Data Recovery',
     initial: 'TB',
@@ -207,6 +221,45 @@ const workers = [
     breakAt: 15,
   ),
 ];
+
+/// @nodoc
+const workers = kDemoTechnicians;
+
+/// Hour of day as a fractional 24h value (`13.75` = 1:45p).
+double hourFromDateTime(DateTime t) =>
+    t.hour + t.minute / 60.0 + t.second / 3600.0 + t.millisecond / 3600000.0;
+
+enum ClockAction { clockIn, clockOut }
+
+class ClockEvent {
+  const ClockEvent({
+    required this.technicianId,
+    required this.technicianName,
+    required this.action,
+    required this.at,
+    required this.hours,
+  });
+
+  final String technicianId;
+  final String technicianName;
+  final ClockAction action;
+  final DateTime at;
+  final ClockHours hours;
+
+  bool get overtime => hours.overtime;
+}
+
+class ClockResult {
+  const ClockResult({
+    required this.ok,
+    required this.message,
+    this.event,
+  });
+
+  final bool ok;
+  final String message;
+  final ClockEvent? event;
+}
 
 const jobSeeds = <List<JobSeed>>[
   [
@@ -274,12 +327,12 @@ List<RepairJob> repairJobsFor(int workerIndex, int day, double clockIn) {
   return out;
 }
 
-DayMeta dayMeta(int month, int day) {
+DayMeta dayMeta(int month, int day, {int technicianCount = 7}) {
   final dow = DateTime(kYear, month + 1, day).weekday % 7; // 0 = Sunday
   final weekday = dow != 0 && dow != 6;
   final seed = math.sin((day + month * 31) * 2.3).abs();
   final crewN = weekday ? 3 + (seed * 4).round() : (seed > 0.62 ? 2 : 0);
-  final perTech = List<double>.generate(workers.length, (x) {
+  final perTech = List<double>.generate(technicianCount, (x) {
     if (x >= crewN) return 0;
     return (((6 + ((seed * 7 + x * 1.7) % 4)) * 10).round()) / 10;
   });
