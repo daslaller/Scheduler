@@ -37,8 +37,8 @@ class _WorkbenchPageState extends State<WorkbenchPage> {
             backgroundColor: Wb.ink,
             behavior: SnackBarBehavior.floating,
             margin: const EdgeInsets.all(18),
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-            content: Text(msg, style: Wb.ui(size: 13, color: Wb.page)),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(Wb.rLg)),
+            content: Text(msg, style: Wb.ui(size: 13, color: Wb.onPrimary)),
           ),
         );
       });
@@ -124,12 +124,12 @@ class _Header extends StatelessWidget {
                 height: 36,
                 alignment: Alignment.center,
                 decoration: BoxDecoration(
-                  color: Wb.ink,
-                  borderRadius: BorderRadius.circular(11),
+                  color: const Color(0x1C2563EB),
+                  borderRadius: BorderRadius.circular(9),
                 ),
                 child: const Text(
                   '✦',
-                  style: TextStyle(fontSize: 15, color: Wb.page, height: 1),
+                  style: TextStyle(fontSize: 15, color: Wb.primary, height: 1),
                 ),
               ),
               const SizedBox(width: 12),
@@ -204,9 +204,13 @@ class _KpiStrip extends StatelessWidget {
   Widget build(BuildContext context) {
     final stats = ctrl.stats;
     return ClipRRect(
-      borderRadius: BorderRadius.circular(14),
+      borderRadius: BorderRadius.circular(Wb.rXl),
       child: Container(
-        color: Wb.line,
+        decoration: BoxDecoration(
+          color: Wb.cream,
+          border: Border.all(color: Wb.line),
+          boxShadow: Wb.cardShadow,
+        ),
         child: IntrinsicHeight(
           child: Row(
             crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -214,9 +218,11 @@ class _KpiStrip extends StatelessWidget {
               for (var i = 0; i < stats.length; i++)
                 Expanded(
                   child: Container(
-                    color: Wb.cream,
-                    margin: EdgeInsets.only(left: i == 0 ? 0 : 1),
-                    padding: const EdgeInsets.fromLTRB(18, 15, 18, 16),
+                    decoration: BoxDecoration(
+                      color: Wb.cream,
+                      border: i == 0 ? null : const Border(left: BorderSide(color: Wb.line)),
+                    ),
+                    padding: const EdgeInsets.fromLTRB(17, 13, 17, 13),
                     child: _Kpi(stat: stats[i], bar: ctrl.statBarWidth(stats[i])),
                   ),
                 ),
@@ -270,10 +276,10 @@ class _Kpi extends StatelessWidget {
               child: ClipRRect(
                 borderRadius: BorderRadius.circular(3),
                 child: SizedBox(
-                  height: 4,
+                  height: 6,
                   child: LinearProgressIndicator(
                     value: bar,
-                    backgroundColor: Wb.track,
+                    backgroundColor: Wb.wash,
                     color: stat.bar,
                   ),
                 ),

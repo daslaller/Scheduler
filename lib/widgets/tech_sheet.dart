@@ -32,7 +32,7 @@ class TechSheet extends StatelessWidget {
         Positioned.fill(
           child: GestureDetector(
             onTap: ctrl.closeSheet,
-            child: Container(color: const Color(0x521D1C1A)),
+            child: Container(color: Wb.scrim),
           ),
         ),
         Positioned(
@@ -44,15 +44,13 @@ class TechSheet extends StatelessWidget {
             color: Wb.cream,
             elevation: 0,
             shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(18),
+              borderRadius: BorderRadius.circular(Wb.rXl),
               side: const BorderSide(color: Wb.line),
             ),
             clipBehavior: Clip.antiAlias,
             child: Container(
               decoration: BoxDecoration(
-                boxShadow: const [
-                  BoxShadow(color: Color(0x381D1C1A), blurRadius: 70, offset: Offset(0, 30)),
-                ],
+                boxShadow: Wb.overlayShadow,
               ),
               child: Column(
                 children: [
@@ -180,7 +178,7 @@ class TechSheet extends StatelessWidget {
                                         color: delta > 0.25
                                             ? Wb.accent
                                             : delta < -0.25
-                                                ? const Color(0xFF2C6047)
+                                                ? Wb.toneSuccessFg
                                                 : Wb.ink,
                                       ),
                                     ),
@@ -330,17 +328,17 @@ class _JobRow extends StatelessWidget {
     final bg = past
         ? Wb.accentSoft
         : st == 'Approved'
-            ? const Color(0xFFE5F1E9)
+            ? Wb.toneSuccessBg
             : st == 'Submitted'
-                ? const Color(0xFFEDE8F5)
-                : const Color(0xFFF0ECE4);
+                ? Wb.toneInfoBg
+                : Wb.toneNeutralBg;
     final fg = past
         ? Wb.accentDark
         : st == 'Approved'
-            ? const Color(0xFF2C6047)
+            ? Wb.toneSuccessFg
             : st == 'Submitted'
-                ? const Color(0xFF4C3A73)
-                : const Color(0xFF5C564C);
+                ? Wb.toneInfoFg
+                : Wb.toneNeutralFg;
 
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 13, vertical: 12),
@@ -378,7 +376,7 @@ class _JobRow extends StatelessWidget {
               style: TextStyle(
                 fontFamily: Wb.sans,
                 fontSize: 9,
-                fontWeight: FontWeight.w700,
+                fontWeight: FontWeight.w600,
                 letterSpacing: 0.81,
                 color: fg,
               ),

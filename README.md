@@ -39,4 +39,4 @@ flutter analyze
 
 ## Mockup
 
-The zip contains five design-system looks (Workbench, Workbench dark, Anchor, Atelier, Shift). This app implements the Workbench light calendar that the thumbnail shows, including the sheet and month overlay.
+The zip contains five design-system looks (Workbench, Workbench dark, Anchor, Atelier, Shift). This app implements the Workbench calendar layout, restyled with **Rail** (RepairX) light tokens: Inter, blue-on-slate, hairline cards.

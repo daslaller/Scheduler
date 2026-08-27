@@ -57,8 +57,8 @@ class WbCircleBtn extends StatelessWidget {
         alignment: Alignment.center,
         decoration: BoxDecoration(
           shape: BoxShape.circle,
-          color: hover ? Wb.ink : Wb.cream,
-          border: Border.all(color: hover ? Wb.ink : Wb.line),
+          color: hover ? Wb.wash : Wb.cream,
+          border: Border.all(color: hover ? Wb.line2 : Wb.line),
         ),
         child: Text(
           glyph,
@@ -66,7 +66,7 @@ class WbCircleBtn extends StatelessWidget {
             fontFamily: Wb.sans,
             fontSize: size > 32 ? 14 : 13,
             height: 1,
-            color: hover ? Wb.cream : Wb.muted3,
+            color: hover ? Wb.ink : Wb.muted3,
           ),
         ),
       ),
@@ -82,7 +82,7 @@ class WbPill extends StatelessWidget {
     this.filled = false,
     this.peach = false,
     this.leading,
-    this.height = 36,
+    this.height = 34,
     this.hPad = 14,
     this.expand = false,
   });
@@ -102,26 +102,26 @@ class WbPill extends StatelessWidget {
         Color fg;
         Color bd;
         if (filled) {
-          bg = hover ? Wb.accent : Wb.ink;
-          fg = Wb.page;
+          bg = hover ? Wb.primaryDark : Wb.primary;
+          fg = Wb.onPrimary;
           bd = bg;
         } else if (peach) {
           bg = hover ? Wb.peachHover : Wb.peach;
           fg = Wb.peachText;
           bd = Wb.peachBorder;
         } else {
-          bg = Wb.cream;
-          fg = Wb.body;
-          bd = hover ? Wb.ink : Wb.line;
+          bg = hover ? Wb.wash : Wb.cream;
+          fg = Wb.ink;
+          bd = hover ? Wb.line2 : Wb.line;
         }
         return AnimatedContainer(
-          duration: const Duration(milliseconds: 140),
+          duration: const Duration(milliseconds: 130),
           height: height,
           width: expand ? double.infinity : null,
           padding: EdgeInsets.symmetric(horizontal: hPad),
           decoration: BoxDecoration(
             color: bg,
-            borderRadius: BorderRadius.circular(height / 2),
+            borderRadius: BorderRadius.circular(Wb.rMd),
             border: Border.all(color: bd, width: filled ? 0 : 1),
           ),
           child: Row(
@@ -171,16 +171,16 @@ class WbAvatar extends StatelessWidget {
       height: size,
       alignment: Alignment.center,
       decoration: BoxDecoration(
-        color: tint.withValues(alpha: 0x1A / 255),
-        border: Border.all(color: tint.withValues(alpha: 0x3D / 255)),
-        borderRadius: BorderRadius.circular(radius ?? size * 0.32),
+        color: tint.withValues(alpha: 0x1C / 255),
+        border: Border.all(color: tint.withValues(alpha: 0x4D / 255)),
+        borderRadius: BorderRadius.circular(radius ?? size / 2),
       ),
       child: Text(
         initial,
         style: TextStyle(
           fontFamily: Wb.sans,
           fontSize: size * 0.34,
-          fontWeight: FontWeight.w700,
+          fontWeight: FontWeight.w600,
           letterSpacing: 0.2,
           color: tint,
           height: 1,
@@ -207,8 +207,8 @@ class SegmentedTabs extends StatelessWidget {
       padding: const EdgeInsets.all(3),
       decoration: BoxDecoration(
         color: Wb.wash,
-        borderRadius: BorderRadius.circular(18),
-        border: Border.all(color: Wb.line2),
+        borderRadius: BorderRadius.circular(Wb.rMd),
+        border: Border.all(color: Wb.line),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
@@ -219,18 +219,19 @@ class SegmentedTabs extends StatelessWidget {
               builder: (_, hover) {
                 final on = i == index;
                 return AnimatedContainer(
-                  duration: const Duration(milliseconds: 140),
+                  duration: const Duration(milliseconds: 130),
                   padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
                   decoration: BoxDecoration(
-                    color: on ? Wb.ink : Colors.transparent,
-                    borderRadius: BorderRadius.circular(15),
+                    color: on ? Wb.cream : Colors.transparent,
+                    borderRadius: BorderRadius.circular(Wb.rSm),
+                    boxShadow: on ? Wb.cardShadow : null,
                   ),
                   child: Text(
                     labels[i],
                     style: Wb.ui(
-                      size: 12.5,
+                      size: 13,
                       weight: on ? FontWeight.w600 : FontWeight.w500,
-                      color: on ? Wb.page : Wb.tabOff,
+                      color: on ? Wb.ink : Wb.tabOff,
                     ),
                   ),
                 );
@@ -300,8 +301,8 @@ class StepperChip extends StatelessWidget {
         alignment: Alignment.center,
         decoration: BoxDecoration(
           color: hover ? Wb.cream2 : Wb.cream,
-          borderRadius: BorderRadius.circular(7),
-          border: Border.all(color: hover ? Wb.ink : Wb.line),
+          borderRadius: BorderRadius.circular(Wb.rSm),
+          border: Border.all(color: hover ? Wb.line2 : Wb.line),
         ),
         child: Text(
           g,

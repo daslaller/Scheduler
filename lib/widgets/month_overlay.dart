@@ -38,7 +38,7 @@ class MonthOverlay extends StatelessWidget {
 
     return Positioned.fill(
       child: Container(
-        color: const Color(0x611D1C1A),
+        color: Wb.scrim,
         child: BackdropFilter(
           filter: ImageFilter.blur(sigmaX: 6, sigmaY: 6),
           child: Padding(
@@ -49,7 +49,7 @@ class MonthOverlay extends StatelessWidget {
                 child: Material(
                   color: Wb.cream,
                   shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(20),
+                    borderRadius: BorderRadius.circular(Wb.rXl),
                     side: const BorderSide(color: Wb.line),
                   ),
                   clipBehavior: Clip.antiAlias,

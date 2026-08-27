@@ -205,7 +205,7 @@ class _NowLineState extends State<_NowLine> with SingleTickerProviderStateMixin 
                       gradient: LinearGradient(
                         begin: Alignment.topCenter,
                         end: Alignment.bottomCenter,
-                        colors: [Wb.accent, Color(0x1FB4432B)],
+                        colors: [Wb.primary, Color(0x1F2563EB)],
                       ),
                     ),
                   ),
@@ -216,14 +216,14 @@ class _NowLineState extends State<_NowLine> with SingleTickerProviderStateMixin 
                   child: Container(
                     padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 2),
                     decoration: BoxDecoration(
-                      color: Wb.accent,
-                      borderRadius: BorderRadius.circular(4),
+                      color: Wb.primary,
+                      borderRadius: BorderRadius.circular(Wb.rXs),
                     ),
                     child: Text(
                       formatHour(kNowHour),
                       style: Wb.code(
                         size: 9,
-                        color: const Color(0xFFFDF3EE),
+                        color: Wb.onPrimary,
                         tracking: 0.03,
                       ),
                     ),
@@ -239,7 +239,7 @@ class _NowLineState extends State<_NowLine> with SingleTickerProviderStateMixin 
                     child: Container(
                       width: 8,
                       height: 8,
-                      decoration: const BoxDecoration(color: Wb.accent, shape: BoxShape.circle),
+                      decoration: const BoxDecoration(color: Wb.primary, shape: BoxShape.circle),
                     ),
                   ),
                 ),
@@ -325,7 +325,7 @@ class _TechRow extends StatelessWidget {
                       children: [
                         Text(
                           '${jobs.length} ${jobs.length == 1 ? 'repair' : 'repairs'} · ${appointed.toStringAsFixed(1)}h',
-                          style: Wb.code(size: 12, color: const Color(0xFF3B362F), tracking: -0.01),
+                          style: Wb.code(size: 12, color: Wb.body, tracking: -0.01),
                         ),
                         if (overflow > 0)
                           Text(
@@ -690,9 +690,9 @@ class _JobTrack extends StatelessWidget {
               bottom: 5,
               child: Container(
                 decoration: BoxDecoration(
-                  color: const Color(0xFFF4F0E8),
-                  borderRadius: BorderRadius.circular(10),
-                  border: Border.all(color: const Color(0xFFE2DBCE), style: BorderStyle.solid),
+                  color: Wb.wash,
+                  borderRadius: BorderRadius.circular(Wb.rLg),
+                  border: Border.all(color: Wb.line),
                 ),
               ),
             ),

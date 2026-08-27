@@ -20,15 +20,15 @@ class NorthlineApp extends StatelessWidget {
         useMaterial3: true,
         scaffoldBackgroundColor: Wb.page,
         colorScheme: const ColorScheme.light(
-          primary: Wb.ink,
-          onPrimary: Wb.page,
+          primary: Wb.primary,
+          onPrimary: Wb.onPrimary,
           surface: Wb.cream,
           onSurface: Wb.ink,
         ),
         fontFamily: Wb.sans,
         snackBarTheme: SnackBarThemeData(
           backgroundColor: Wb.ink,
-          contentTextStyle: Wb.ui(size: 13, color: Wb.page),
+          contentTextStyle: Wb.ui(size: 13, color: Wb.onPrimary),
         ),
       ),
       home: const WorkbenchPage(),
