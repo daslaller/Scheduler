@@ -61,6 +61,7 @@ class _RxToastHostState extends State<RxToastHost> {
   final GlobalKey<OverlayState> _overlayKey = GlobalKey<OverlayState>();
   late final OverlayEntry _rootEntry;
   StreamSubscription<RxToastMessage>? _sub;
+  final List<Timer> _timers = [];
 
   static _RxToastHostState? get current => _hosts.isEmpty ? null : _hosts.last;
 
@@ -70,7 +71,7 @@ class _RxToastHostState extends State<RxToastHost> {
     _hosts.add(this);
     _rootEntry = OverlayEntry(
       maintainState: true,
-      builder: (context) => widget.child,
+      builder: (context) => Positioned.fill(child: widget.child),
     );
     _listen(widget.controller);
   }
@@ -95,6 +96,10 @@ class _RxToastHostState extends State<RxToastHost> {
   @override
   void dispose() {
     _sub?.cancel();
+    for (final timer in _timers) {
+      timer.cancel();
+    }
+    _timers.clear();
     _hosts.remove(this);
     super.dispose();
   }
@@ -104,18 +109,22 @@ class _RxToastHostState extends State<RxToastHost> {
       final overlay = _overlayKey.currentState;
       if (overlay == null || !mounted) return;
       late OverlayEntry entry;
+      late Timer timer;
+      void remove() {
+        timer.cancel();
+        _timers.remove(timer);
+        if (entry.mounted) entry.remove();
+      }
+
       entry = OverlayEntry(
         builder: (ctx) => _ToastCard(
           message: message,
-          onDismiss: () {
-            if (entry.mounted) entry.remove();
-          },
+          onDismiss: remove,
         ),
       );
       overlay.insert(entry);
-      Future<void>.delayed(message.duration, () {
-        if (entry.mounted) entry.remove();
-      });
+      timer = Timer(message.duration, remove);
+      _timers.add(timer);
     }
 
     if (_overlayKey.currentState == null) {

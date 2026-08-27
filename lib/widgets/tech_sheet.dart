@@ -118,11 +118,15 @@ class TechSheet extends StatelessWidget {
                     child: ListView(
                       padding: const EdgeInsets.fromLTRB(24, 19, 24, 19),
                       children: [
-                        SegmentedTabs(
-                          labels: const ['Clocked time', 'Appointed work'],
-                          index: showClock ? 0 : 1,
-                          onChanged: (v) =>
-                              ctrl.setSheetTab(v == 0 ? SheetTab.clock : SheetTab.work),
+                        FittedBox(
+                          fit: BoxFit.scaleDown,
+                          alignment: Alignment.centerLeft,
+                          child: SegmentedTabs(
+                            labels: const ['Clocked time', 'Appointed work'],
+                            index: showClock ? 0 : 1,
+                            onChanged: (v) =>
+                                ctrl.setSheetTab(v == 0 ? SheetTab.clock : SheetTab.work),
+                          ),
                         ),
                         const SizedBox(height: 16),
                         if (showClock) ...[
