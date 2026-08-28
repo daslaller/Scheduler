@@ -85,16 +85,12 @@ abstract final class Wb {
 
   static const scrim = Color(0x660F172A);
 
-  static TextStyle kicker({
-    double size = 10.5,
-    double tracking = 0.06,
-    Color? color,
-  }) => TextStyle(
+  static TextStyle kicker({double size = 10.5, double tracking = 0.06}) => TextStyle(
         fontFamily: sans,
         fontSize: size,
         fontWeight: FontWeight.w600,
         letterSpacing: size * 0.06,
-        color: color ?? muted,
+        color: muted,
         height: 1.2,
       );
 
