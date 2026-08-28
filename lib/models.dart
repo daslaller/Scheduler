@@ -114,10 +114,20 @@ class ClockHours {
     required this.inHour,
     required this.outHour,
     required this.breakAt,
+    this.breakHours = 0.5,
     this.open = false,
   });
 
   final double inHour, outHour, breakAt;
+
+  /// How long the break actually was.
+  ///
+  /// ⚠️ **It used to be hardcoded** — every bar's subline read `· 30m break`
+  /// whatever the punches said, so a 45-minute lunch printed as half an hour
+  /// on the one screen that exists to report hours. A default is kept because
+  /// the seeded rota has no real figure to give, but a host supplying a
+  /// history supplies this too.
+  final double breakHours;
 
   /// The run began before this day's midnight — a shift somebody started
   /// yesterday and never closed. Drawn clipped to the left edge.
@@ -135,6 +145,16 @@ class ClockHours {
   double get paid => outHour - inHour;
   bool get overtime => paid > 8;
   bool get hasBreak => breakAt > 0;
+
+  /// The break as a fraction of the drawn run, for a mark painted over it.
+  /// Clamped into the bar: a break recorded outside the run it belongs to is
+  /// a punch to fix, not a reason to paint outside the shift.
+  (double, double) get breakBand {
+    final span = outHour - inHour;
+    if (span <= 0 || !hasBreak) return (0, 0);
+    final at = ((breakAt - inHour) / span).clamp(0.0, 1.0);
+    return (at, (breakHours / span).clamp(0.0, 1.0 - at));
+  }
 
   /// Somebody is on shift *right now*: open, and the clock has not run past
   /// what a shift plausibly is.
@@ -433,6 +453,33 @@ const jobSeeds = <List<JobSeed>>[
     ),
   ],
 ];
+
+/// ISO-8601 week number. Thursday decides the year, which is the whole rule:
+/// a week is in the year holding most of its days.
+int isoWeekOf(DateTime d) {
+  final day = DateTime(d.year, d.month, d.day);
+  final thursday = day.add(Duration(days: 4 - (day.weekday == 7 ? 7 : day.weekday)));
+  final jan1 = DateTime(thursday.year, 1, 1);
+  return 1 + (thursday.difference(jan1).inDays / 7).floor();
+}
+
+/// 24-hour clock label (`08:45`, `17:10`).
+///
+/// What a host drawing a real punch log wants: `8.4h` and `5:10p` are a
+/// rounding and a reading of somebody's pay, and a shop reconciling a
+/// timesheet reads the punch back as it was made.
+String formatClock(double h) {
+  final hh = h.floor();
+  final mm = ((h - hh) * 60).round();
+  return '${hh.toString().padLeft(2, '0')}:${mm.toString().padLeft(2, '0')}';
+}
+
+/// A span of hours as `HH:MM` — `7.666` is `07:40`, not `7.7h`.
+String formatSpan(double hours) {
+  final h = hours.abs().floor();
+  final m = ((hours.abs() - h) * 60).round();
+  return '${h.toString().padLeft(2, '0')}:${m.toString().padLeft(2, '0')}';
+}
 
 /// 12-hour clock label matching the mockup (`1:45p`, `8a`).
 String formatHour(double h, {bool amPm = false}) {

@@ -234,22 +234,41 @@ class RxSchedulerController extends ChangeNotifier implements RxToastSource {
       // ordinary number that grew all weekend.
       StatTile(
         label: 'On the bench',
-        value: split.settled.toStringAsFixed(1),
+        value: hasHistory
+            ? formatSpan(split.settled)
+            : split.settled.toStringAsFixed(1),
         unit: 'hours',
         sub: split.open == 0
             ? 'all of it clocked out of'
+            : hasHistory
+            ? '+${formatSpan(split.open)} still running'
             : '+${split.open.toStringAsFixed(1)}h still running',
         dot: Wb.teal,
         bar: Wb.teal,
       ),
-      StatTile(
-        label: 'Utilisation',
-        value: '$util%',
-        unit: '',
-        sub: '3 slots after 3pm',
-        dot: Wb.forest,
-        bar: Wb.forest,
-      ),
+      // ⚠️ **Utilisation and billable labour are ROTA figures**, and a host
+      // drawing a real punch log holds neither: capacity is contracted hours
+      // and the rate is a price list. Over a history they are replaced by two
+      // the punches do answer, under the same rule that already drops the
+      // approval state — **nothing is stated that the log does not hold.**
+      if (hasHistory)
+        StatTile(
+          label: 'Peak bench',
+          value: '$peakBench',
+          unit: peakBench == 1 ? 'technician' : 'technicians',
+          sub: 'the most on at once',
+          dot: Wb.forest,
+          bar: Wb.forest,
+        )
+      else
+        StatTile(
+          label: 'Utilisation',
+          value: '$util%',
+          unit: '',
+          sub: '3 slots after 3pm',
+          dot: Wb.forest,
+          bar: Wb.forest,
+        ),
       // ⚠️ **A shift somebody is standing in is not a fix.** Counting every
       // open clock puts today's live one in the alarm tile, which is how the
       // tile stops being read by lunchtime on the first day.
@@ -266,14 +285,24 @@ class RxSchedulerController extends ChangeNotifier implements RxToastSource {
         bar: Wb.accent,
         valueColor: forgotten > 0 ? Wb.accent : null,
       ),
-      StatTile(
-        label: 'Billable labour',
-        value: '\$${(billable / 1000).toStringAsFixed(1)}k',
-        unit: '',
-        sub: 'parts excluded',
-        dot: Wb.gold,
-        bar: Wb.gold,
-      ),
+      if (hasHistory)
+        StatTile(
+          label: 'On break',
+          value: formatSpan(breakHours),
+          unit: 'hours',
+          sub: 'inside the shifts above',
+          dot: Wb.gold,
+          bar: Wb.gold,
+        )
+      else
+        StatTile(
+          label: 'Billable labour',
+          value: '\$${(billable / 1000).toStringAsFixed(1)}k',
+          unit: '',
+          sub: 'parts excluded',
+          dot: Wb.gold,
+          bar: Wb.gold,
+        ),
     ];
   }
 
@@ -282,7 +311,34 @@ class RxSchedulerController extends ChangeNotifier implements RxToastSource {
       return (overtimeHours / 8).clamp(0, 1);
     }
     if (s.label.startsWith('Billable')) return 0.72;
+    // Both history tiles are fractions of something the log actually holds:
+    // the busiest half-hour against the roster, and break against bench.
+    if (s.label.startsWith('Peak')) {
+      return technicians.isEmpty
+          ? 0
+          : (peakBench / technicians.length).clamp(0, 1);
+    }
+    if (s.label.startsWith('On break')) {
+      return totalHours <= 0 ? 0 : (breakHours / totalHours).clamp(0, 1);
+    }
     return (totalHours / capacity).clamp(0, 1);
+  }
+
+  /// The busiest half-hour of the drawn day, in people.
+  int get peakBench {
+    final busy = coverageBusy();
+    return busy.isEmpty ? 0 : busy.reduce((a, b) => a > b ? a : b);
+  }
+
+  /// Break time inside the shifts on screen. Only the settled ones: an open
+  /// run's break is as unconfirmed as its clock-out.
+  double get breakHours {
+    var total = 0.0;
+    for (var i = 0; i < technicians.length; i++) {
+      final c = clockOf(i);
+      if (c.hasBreak && !c.open) total += c.breakHours;
+    }
+    return total;
   }
 
   List<int> coverageBusy() {
