@@ -392,6 +392,12 @@ class _WeekRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // ⚠️ The week number was `31 + row`, so every month of every year
+    // reported weeks 31–36. Derived from the row's own Thursday, clamped into
+    // the month for the partial first and last rows.
+    final wk = isoWeekOf(
+      DateTime(ctrl.date.year, ctrl.date.month, (row * 7 - offset + 4).clamp(1, dim)),
+    );
     var wkHours = 0.0;
     final cells = <Widget>[];
     for (var c = 0; c < 7; c++) {
@@ -444,7 +450,7 @@ class _WeekRow extends StatelessWidget {
                       style: Wb.code(size: 15),
                     ),
                     Text(
-                      'Week ${31 + row}',
+                      'Week $wk',
                       style: Wb.kicker(size: 9, tracking: 0.1),
                     ),
                     const SizedBox(height: 8),

@@ -25,7 +25,7 @@ class BenchTimeline extends StatelessWidget {
       child: Column(
         children: [
           _Toolbar(ctrl: ctrl, isClock: isClock),
-          _Ruler(window: window),
+          _Ruler(window: window, clock24: ctrl.hasHistory),
           _Rows(ctrl: ctrl, isClock: isClock, window: window),
           _Coverage(ctrl: ctrl),
         ],
@@ -49,22 +49,33 @@ class _Toolbar extends StatelessWidget {
       ),
       child: Row(
         children: [
-          SegmentedTabs(
-            labels: const ['Clocked time', 'Repairs'],
-            index: isClock ? 0 : 1,
-            onChanged: (i) => ctrl.setView(
-              i == 0 ? TimelineView.clock : TimelineView.repairs,
+          // ⚠️ **Over a real history there is one track, and nothing to drag.**
+          // The repairs track draws appointed jobs, and a host with a punch
+          // log has none — a tab onto an empty axis is a feature that does not
+          // exist. The drag hint goes with it: correcting a punch is a stated
+          // time, and nudging a bar half an hour is the opposite of stating
+          // one.
+          if (ctrl.hasHistory)
+            Text('Clocked time', style: Wb.ui(size: 12.5, weight: FontWeight.w600))
+          else ...[
+            SegmentedTabs(
+              labels: const ['Clocked time', 'Repairs'],
+              index: isClock ? 0 : 1,
+              onChanged: (i) => ctrl.setView(
+                i == 0 ? TimelineView.clock : TimelineView.repairs,
+              ),
             ),
-          ),
-          const SizedBox(width: 16),
-          Expanded(
-            child: Text(
-              isClock
-                  ? 'Drag either end of a shift, or use − / ＋ to take off or add 30 minutes'
-                  : 'Appointed repair work · drag to reassign · shaded band is the technician’s clocked shift',
-              style: Wb.ui(size: 11.5, color: Wb.muted2, height: 1.35),
+            const SizedBox(width: 16),
+            Expanded(
+              child: Text(
+                isClock
+                    ? 'Drag either end of a shift, or use − / ＋ to take off or add 30 minutes'
+                    : 'Appointed repair work · drag to reassign · shaded band is the technician’s clocked shift',
+                style: Wb.ui(size: 11.5, color: Wb.muted2, height: 1.35),
+              ),
             ),
-          ),
+          ],
+          const Spacer(),
           const SizedBox(width: 12),
           Wrap(
             spacing: 13,
@@ -72,7 +83,13 @@ class _Toolbar extends StatelessWidget {
             children: [
               if (isClock) ...[
                 const LegendDot(color: Wb.shiftHandle, label: 'On the clock'),
-                const LegendDot(color: Wb.accent, label: 'Over 8h'),
+                // ⚠️ **Over 8h is a rota alarm, not a punch-log fact.** A full
+                // day's work is not a problem, and colouring every ordinary
+                // shift red spends the one colour that means one.
+                if (ctrl.hasHistory)
+                  const LegendDot(color: Wb.accent, label: 'No clock-out')
+                else
+                  const LegendDot(color: Wb.accent, label: 'Over 8h'),
               ] else
                 for (final k in JobKind.values)
                   LegendDot(color: toneOf(k).rail, label: toneOf(k).label),
@@ -85,7 +102,8 @@ class _Toolbar extends StatelessWidget {
 }
 
 class _Ruler extends StatelessWidget {
-  const _Ruler({required this.window});
+  const _Ruler({required this.window, required this.clock24});
+  final bool clock24;
   final DayWindow window;
 
   @override
@@ -123,7 +141,7 @@ class _Ruler extends StatelessWidget {
                             ),
                             child: k.isEven
                                 ? Text(
-                                    formatHour(hours[k].toDouble()),
+                                    _at(clock24, hours[k].toDouble()),
                                     style: Wb.code(
                                       size: 10,
                                       weight: FontWeight.w500,
@@ -179,7 +197,11 @@ class _Rows extends StatelessWidget {
               ),
               // Both: main's live clock, and the derived window it is placed
               // against.
-              _NowLine(window: window, nowHour: ctrl.nowHour),
+              _NowLine(
+                window: window,
+                nowHour: ctrl.nowHour,
+                clock24: ctrl.hasHistory,
+              ),
             ],
           );
         },
@@ -189,7 +211,12 @@ class _Rows extends StatelessWidget {
 }
 
 class _NowLine extends StatefulWidget {
-  const _NowLine({required this.window, required this.nowHour});
+  const _NowLine({
+    required this.window,
+    required this.nowHour,
+    required this.clock24,
+  });
+  final bool clock24;
   final DayWindow window;
   final double nowHour;
   @override
@@ -252,7 +279,7 @@ class _NowLineState extends State<_NowLine>
                       borderRadius: BorderRadius.circular(Wb.rXs),
                     ),
                     child: Text(
-                      formatHour(widget.nowHour),
+                      _at(widget.clock24, widget.nowHour),
                       style: Wb.code(
                         size: 9,
                         color: Wb.onPrimary,
@@ -349,15 +376,34 @@ class _TechRow extends StatelessWidget {
                           ),
                           const SizedBox(height: 2),
                           Text(
-                            w.role,
+                            // Over a real history the second line says what
+                            // this person's day *is* — the question the board
+                            // is being read for. A job title is on their
+                            // profile.
+                            ctrl.hasHistory ? _stateOf(clock) : w.role,
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
-                            style: Wb.kicker(size: 9.5, tracking: 0.09),
+                            style: Wb.kicker(
+                              size: 9.5,
+                              tracking: 0.09,
+                              color: ctrl.hasHistory && clock.forgotten
+                                  ? Wb.accent
+                                  : null,
+                            ),
                           ),
                         ],
                       ),
                     ),
-                    if (isClock)
+                    // ⚠️ **No ± over a real history.** The steppers edit a
+                    // *planned* shift by half an hour a tap; a punch log has
+                    // no planned shift, and a correction is a stated time
+                    // made deliberately, not a nudge. Read-only chip.
+                    if (isClock && ctrl.hasHistory)
+                      _HoursChip(
+                        label: formatSpan(clock.paid),
+                        danger: clock.forgotten,
+                      )
+                    else if (isClock)
                       StepperChip(
                         onMinus: () =>
                             ctrl.nudge(index, inSide: false, delta: -0.5),
@@ -418,6 +464,43 @@ class _TechRow extends StatelessWidget {
   }
 }
 
+/// What this person's day is, in three words or fewer.
+String _stateOf(ClockHours c) {
+  if (c.forgotten) return 'NO CLOCK-OUT';
+  if (c.live) return 'ON SHIFT NOW';
+  if (c.paid <= 0) return 'NOT CLOCKED IN';
+  return '1 SHIFT';
+}
+
+/// The day's hours, stated and not editable.
+class _HoursChip extends StatelessWidget {
+  const _HoursChip({required this.label, required this.danger});
+  final String label;
+  final bool danger;
+
+  @override
+  Widget build(BuildContext context) => Container(
+    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+    decoration: BoxDecoration(
+      color: danger ? Wb.accentSoft : Wb.cream2,
+      borderRadius: BorderRadius.circular(Wb.rMd),
+      border: Border.all(color: danger ? Wb.accentHandle : Wb.line),
+    ),
+    child: Text(
+      label,
+      style: Wb.code(
+        size: 12,
+        color: danger ? Wb.accentDark : Wb.body,
+        tracking: -0.01,
+      ),
+    ),
+  );
+}
+
+/// A clock reading, in whichever vocabulary the board is speaking.
+String _at(bool clock24, double h) =>
+    clock24 ? formatClock(h) : formatHour(h);
+
 class _HourGridPainter extends CustomPainter {
   const _HourGridPainter({required this.window});
   final DayWindow window;
@@ -463,7 +546,7 @@ class _ShiftTrack extends StatelessWidget {
       0.0,
       1.0,
     );
-    final over = clock.overtime;
+    final over = clock.overtime && !ctrl.hasHistory;
     return Stack(
       children: [
         Positioned(
@@ -472,6 +555,7 @@ class _ShiftTrack extends StatelessWidget {
           top: 9,
           bottom: 9,
           child: _ShiftBar(
+            clock24: ctrl.hasHistory,
             clock: clock,
             overtime: over,
             onDragIn: (d) => ctrl.nudge(index, inSide: true, delta: d),
@@ -488,12 +572,17 @@ class _ShiftBar extends StatefulWidget {
   const _ShiftBar({
     required this.clock,
     required this.overtime,
+    required this.clock24,
     required this.onDragIn,
     required this.onDragOut,
     required this.onTap,
   });
   final ClockHours clock;
   final bool overtime;
+
+  /// Read the punches back as they were made (`08:45`), rather than as the
+  /// mockup's `8:45a` — see [formatClock].
+  final bool clock24;
   final ValueChanged<double> onDragIn, onDragOut;
   final VoidCallback onTap;
 
@@ -587,10 +676,10 @@ class _ShiftBarState extends State<_ShiftBar> {
                       forgotten
                           ? (clock.entersDay
                                 ? 'from yesterday → no clock-out'
-                                : '${formatHour(clock.inHour)} → no clock-out')
+                                : '${_at(widget.clock24, clock.inHour)} → no clock-out')
                           : live
-                          ? '${formatHour(clock.inHour)} → on shift'
-                          : '${formatHour(clock.inHour)} – ${formatHour(clock.outHour)}',
+                          ? '${_at(widget.clock24, clock.inHour)} → on shift'
+                          : '${_at(widget.clock24, clock.inHour)} – ${_at(widget.clock24, clock.outHour)}',
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                       style: Wb.code(
@@ -604,9 +693,12 @@ class _ShiftBarState extends State<_ShiftBar> {
                       // "worked": from the punch stream a running shift and a
                       // forgotten one are the same event, and only a person
                       // can tell them apart.
-                      '${clock.paid.toStringAsFixed(1)}h '
+                      '${widget.clock24 ? formatSpan(clock.paid) : '${clock.paid.toStringAsFixed(1)}h'} '
                       '${clock.open ? 'elapsed' : 'on the clock'}'
-                      '${clock.hasBreak ? ' · 30m break' : ''}',
+                      // ⚠️ This said `30m` whatever the punches held, so a
+                      // 45-minute lunch printed as half an hour on the one
+                      // screen that reports hours.
+                      '${clock.hasBreak ? ' · ${(clock.breakHours * 60).round()}m break' : ''}',
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                       style: Wb.ui(
@@ -690,108 +782,67 @@ class _Handle extends StatelessWidget {
   }
 }
 
+/// The break, hatched across the **full height** of the bar.
+///
+/// ⚠️ **It used to be two 10px notches at the bar's edges**, in a tone a shade
+/// off the fill, and at a glance a shift with a break was indistinguishable
+/// from one without — the subline was the only thing that said so. A break is
+/// a stretch of the shift that does not count, so it is marked over the whole
+/// stretch.
+///
+/// Hatching rather than knocking a hole through: a hole in a 300px bar reads
+/// as *two shifts*, and this is one. Rules at 45°, 6px apart — at 4px they
+/// moiré against the hour grid showing through behind them.
 class _BreakMarks extends StatelessWidget {
   const _BreakMarks({required this.clock, required this.overtime});
   final ClockHours clock;
   final bool overtime;
 
   @override
-  Widget build(BuildContext context) {
-    final span = clock.outHour - clock.inHour;
-    final left = (clock.breakAt - 0.25 - clock.inHour) / span;
-    final w = (0.5 / span).clamp(0.0, 1.0);
-    return Positioned.fill(
-      child: LayoutBuilder(
-        builder: (context, box) {
-          return Stack(
-            children: [
-              Positioned(
-                left: left * box.maxWidth,
-                width: (w * box.maxWidth).clamp(13, 999),
-                top: -1,
-                bottom: -1,
-                child: IgnorePointer(
-                  child: Column(
-                    children: [
-                      SizedBox(
-                        height: 10,
-                        child: ClipPath(
-                          clipper: _TopNotch(),
-                          child: CustomPaint(painter: _HashPainter(overtime)),
-                        ),
-                      ),
-                      const Spacer(),
-                      SizedBox(
-                        height: 10,
-                        child: ClipPath(
-                          clipper: _BottomNotch(),
-                          child: CustomPaint(painter: _HashPainter(overtime)),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-            ],
-          );
-        },
-      ),
-    );
-  }
-}
-
-class _TopNotch extends CustomClipper<Path> {
-  @override
-  Path getClip(Size size) => Path()
-    ..moveTo(0, 0)
-    ..lineTo(size.width, 0)
-    ..lineTo(size.width, size.height)
-    ..lineTo(size.width * 0.5, size.height * 0.42)
-    ..lineTo(0, size.height)
-    ..close();
-
-  @override
-  bool shouldReclip(covariant CustomClipper<Path> oldClipper) => false;
-}
-
-class _BottomNotch extends CustomClipper<Path> {
-  @override
-  Path getClip(Size size) => Path()
-    ..moveTo(0, size.height)
-    ..lineTo(size.width, size.height)
-    ..lineTo(size.width, 0)
-    ..lineTo(size.width * 0.5, size.height * 0.58)
-    ..lineTo(0, 0)
-    ..close();
-
-  @override
-  bool shouldReclip(covariant CustomClipper<Path> oldClipper) => false;
+  Widget build(BuildContext context) => Positioned.fill(
+    child: IgnorePointer(
+      child: CustomPaint(painter: _HashPainter(clock, overtime)),
+    ),
+  );
 }
 
 class _HashPainter extends CustomPainter {
-  _HashPainter(this.overtime);
+  _HashPainter(this.clock, this.overtime);
+  final ClockHours clock;
   final bool overtime;
 
   @override
   void paint(Canvas canvas, Size size) {
-    final hash = overtime ? Wb.accentHandle : Wb.breakHash;
-    canvas.drawRect(Offset.zero & size, Paint()..color = Wb.cream);
-    final p = Paint()
-      ..color = hash
-      ..strokeWidth = 1.5;
-    for (var x = -size.height; x < size.width + size.height; x += 6) {
-      canvas.drawLine(Offset(x, size.height), Offset(x + size.height, 0), p);
-    }
-    canvas.drawRect(Rect.fromLTWH(0, 0, 1, size.height), Paint()..color = hash);
-    canvas.drawRect(
-      Rect.fromLTWH(size.width - 1, 0, 1, size.height),
-      Paint()..color = hash,
+    final (at, width) = clock.breakBand;
+    if (width <= 0) return;
+    final band = Rect.fromLTWH(
+      at * size.width,
+      0,
+      width * size.width,
+      size.height,
     );
+    canvas.save();
+    canvas.clipRect(band);
+    final p = Paint()
+      ..color = (overtime ? Wb.accentHandle : Wb.shiftHandle).withValues(
+        alpha: 0.42,
+      )
+      ..strokeWidth = 1;
+    for (var x = band.left - band.height; x < band.right; x += 6) {
+      canvas.drawLine(
+        Offset(x, band.bottom),
+        Offset(x + band.height, band.top),
+        p,
+      );
+    }
+    canvas.restore();
   }
 
   @override
-  bool shouldRepaint(covariant _HashPainter oldDelegate) =>
-      oldDelegate.overtime != overtime;
+  bool shouldRepaint(covariant _HashPainter old) =>
+      old.overtime != overtime ||
+      old.clock.breakAt != clock.breakAt ||
+      old.clock.breakHours != clock.breakHours;
 }
 
 class _JobTrack extends StatelessWidget {
@@ -943,6 +994,10 @@ class _Coverage extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final busy = ctrl.coverageBusy();
+    final peak = ctrl.hasHistory
+        ? (busy.isEmpty ? 0 : busy.reduce((a, b) => a > b ? a : b))
+        : ctrl.technicians.length;
+    bool threshold(int n) => ctrl.hasHistory ? n == 0 : n < 4;
     return Container(
       padding: const EdgeInsets.fromLTRB(18, 15, 18, 18),
       decoration: const BoxDecoration(
@@ -952,14 +1007,14 @@ class _Coverage extends StatelessWidget {
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const SizedBox(
+          SizedBox(
             width: Wb.headWidth,
             child: Padding(
-              padding: EdgeInsets.only(right: 16),
+              padding: const EdgeInsets.only(right: 16),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(
+                  const Text(
                     'BENCH COVERAGE',
                     style: TextStyle(
                       fontFamily: Wb.sans,
@@ -969,9 +1024,18 @@ class _Coverage extends StatelessWidget {
                       color: Wb.muted,
                     ),
                   ),
-                  SizedBox(height: 4),
+                  const SizedBox(height: 4),
                   Text(
-                    'Dashed line = 4 technicians minimum for the walk-in SLA',
+                    // ⚠️ **No threshold over a real history.** "4 technicians
+                    // minimum for the walk-in SLA" is a rota commitment; a
+                    // punch log holds no SLA and no opening hours, so the
+                    // chart reports headcount and says so instead of drawing
+                    // a line nobody set.
+                    ctrl.hasHistory
+                        ? 'How many were on, half hour by half hour. Not '
+                              'measured against opening hours, which are not '
+                              'recorded here.'
+                        : 'Dashed line = 4 technicians minimum for the walk-in SLA',
                     style: TextStyle(
                       fontFamily: Wb.sans,
                       fontSize: 11.5,
@@ -988,29 +1052,46 @@ class _Coverage extends StatelessWidget {
               height: 58,
               child: Stack(
                 children: [
-                  const Positioned(
-                    left: 0,
-                    right: 0,
-                    bottom: 32,
-                    child: DashedLine(color: Wb.dashed),
-                  ),
+                  if (!ctrl.hasHistory)
+                    const Positioned(
+                      left: 0,
+                      right: 0,
+                      bottom: 32,
+                      child: DashedLine(color: Wb.dashed),
+                    ),
                   Row(
                     crossAxisAlignment: CrossAxisAlignment.end,
                     children: [
                       for (final n in busy)
                         Expanded(
-                          child: Align(
-                            alignment: Alignment.bottomCenter,
-                            child: Container(
-                              height: (n / ctrl.technicians.length * 32)
-                                  .clamp(n == 0 ? 0 : 4, 58),
-                              decoration: BoxDecoration(
-                                color: n < 4
-                                    ? Wb.coverageRed
-                                    : Wb.coverageGreen,
-                                borderRadius: const BorderRadius.vertical(
-                                  top: Radius.circular(3),
-                                  bottom: Radius.circular(1),
+                          // ⚠️ **A gap, or the bars are one shape.** Butted
+                          // together at `Expanded` width the rounded tops
+                          // merge into a skyline and half-hours stop being
+                          // countable, which is the whole question the strip
+                          // is asked.
+                          child: Padding(
+                            padding: const EdgeInsets.symmetric(horizontal: 1.5),
+                            child: Align(
+                              alignment: Alignment.bottomCenter,
+                              child: Container(
+                                // ⚠️ Scaled to the day's OWN busiest
+                                // half-hour, not to the roster. Against a
+                                // roster of five, a shop that runs two on a
+                                // Tuesday draws a flat strip of stubs and the
+                                // shape of the day is lost.
+                                height: peak == 0
+                                    ? 0
+                                    : (n / peak * 44).clamp(n == 0 ? 0 : 4, 58),
+                                decoration: BoxDecoration(
+                                  // Red is **nobody on the bench**, not "fewer
+                                  // than a target nobody set".
+                                  color: threshold(n)
+                                      ? Wb.coverageRed
+                                      : Wb.coverageGreen,
+                                  borderRadius: const BorderRadius.vertical(
+                                    top: Radius.circular(3),
+                                    bottom: Radius.circular(1),
+                                  ),
                                 ),
                               ),
                             ),
