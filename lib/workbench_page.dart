@@ -4,6 +4,7 @@ import 'controller.dart';
 import 'models.dart';
 import 'theme.dart';
 import 'widgets/chrome.dart';
+import 'self_page.dart';
 import 'widgets/month_overlay.dart';
 import 'widgets/tech_sheet.dart';
 import 'widgets/timeline.dart';
@@ -37,6 +38,37 @@ class _WorkbenchPageState extends State<WorkbenchPage> {
   Widget build(BuildContext context) {
     final date = ctrl.date;
     final title = '${kDayNames[date.weekday % 7]} ${ctrl.day} ${kMonNames[ctrl.month]}';
+
+    // The self view is the same data seen as one person's — a mode of this
+    // page rather than its own route, so the controller, the month modal and
+    // the fixtures are shared rather than duplicated.
+    if (ctrl.selfView) {
+      return Scaffold(
+        backgroundColor: Wb.page,
+        body: SafeArea(
+          child: SingleChildScrollView(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(22, 14, 22, 0),
+                  child: Row(
+                    children: [
+                      WbPill(
+                        label: 'Back to the bench',
+                        leading: const Icon(Icons.arrow_back, size: 15),
+                        onTap: () => ctrl.showSelf(false),
+                      ),
+                    ],
+                  ),
+                ),
+                SelfPage(ctrl: ctrl, index: 0),
+              ],
+            ),
+          ),
+        ),
+      );
+    }
 
     return Scaffold(
       backgroundColor: Wb.page,
@@ -72,7 +104,6 @@ class _WorkbenchPageState extends State<WorkbenchPage> {
           ),
           if (ctrl.sheetIndex != null)
             Positioned.fill(child: TechSheet(ctrl: ctrl)),
-          if (ctrl.monthOpen) MonthOverlay(ctrl: ctrl),
         ],
       ),
     );
@@ -108,10 +139,8 @@ class _Header extends StatelessWidget {
                   color: const Color(0x1C2563EB),
                   borderRadius: BorderRadius.circular(9),
                 ),
-                child: const Text(
-                  '✦',
-                  style: TextStyle(fontSize: 15, color: Wb.primary, height: 1),
-                ),
+                child: const Icon(Icons.handyman_outlined,
+                    size: 17, color: Wb.primary),
               ),
               const SizedBox(width: 12),
               Column(
@@ -153,14 +182,21 @@ class _Header extends StatelessWidget {
               children: [
                 WbPill(
                   label: 'Copy last week',
-                  leading: const Text('⧉'),
+                  leading: const Icon(Icons.copy_all_outlined, size: 14),
                   onTap: ctrl.copyWeek,
                 ),
                 WbPill(
                   label: 'Month overlay',
                   peach: true,
-                  leading: const Text('▦'),
-                  onTap: ctrl.openMonth,
+                  leading: const Icon(Icons.calendar_view_month_outlined, size: 15),
+                  // A modal now: the route owns Escape, the back button and
+                  // the scrim, and the self view opens the same one.
+                  onTap: () => showMonthOverlay(context, ctrl: ctrl),
+                ),
+                WbPill(
+                  label: 'My schedule',
+                  leading: const Icon(Icons.person_outline, size: 15),
+                  onTap: () => ctrl.showSelf(true),
                 ),
                 WbPill(
                   label: ctrl.approved ? '4 sheets approved' : 'Approve 4 sheets',
@@ -267,7 +303,19 @@ class _Kpi extends StatelessWidget {
               ),
             ),
             const SizedBox(width: 8),
-            Text(stat.sub, style: Wb.ui(size: 11, color: Wb.muted2)),
+            // ⚠️ **Flexible, because these sentences got longer.** The tiles
+            // used to say "within limits"; they now say "+18.2h still
+            // running" and "no clock-out — the hours are a guess", which is
+            // the whole improvement and also 93px more than the tile had.
+            Flexible(
+              child: Text(
+                stat.sub,
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+                textAlign: TextAlign.right,
+                style: Wb.ui(size: 11, color: Wb.muted2),
+              ),
+            ),
           ],
         ),
       ],

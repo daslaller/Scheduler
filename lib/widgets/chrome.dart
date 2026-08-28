@@ -38,11 +38,18 @@ class _HoverTapState extends State<HoverTap> {
 class WbCircleBtn extends StatelessWidget {
   const WbCircleBtn({
     super.key,
-    required this.glyph,
+    this.glyph,
+    this.icon,
     required this.onTap,
     this.size = 33,
-  });
-  final String glyph;
+  }) : assert(glyph != null || icon != null);
+
+  /// A character the app's own font actually has. ⚠️ Inter has no
+  /// block-elements or dingbat coverage and Flutter does not substitute, so a
+  /// `✕` or a `＋` here renders as a **tofu box** — pass [icon] for anything
+  /// outside plain text.
+  final String? glyph;
+  final IconData? icon;
   final VoidCallback onTap;
   final double size;
 
@@ -60,15 +67,21 @@ class WbCircleBtn extends StatelessWidget {
           color: hover ? Wb.wash : Wb.cream,
           border: Border.all(color: hover ? Wb.line2 : Wb.line),
         ),
-        child: Text(
-          glyph,
-          style: TextStyle(
-            fontFamily: Wb.sans,
-            fontSize: size > 32 ? 14 : 13,
-            height: 1,
-            color: hover ? Wb.ink : Wb.muted3,
-          ),
-        ),
+        child: icon != null
+            ? Icon(
+                icon,
+                size: size > 32 ? 16 : 15,
+                color: hover ? Wb.ink : Wb.muted3,
+              )
+            : Text(
+                glyph!,
+                style: TextStyle(
+                  fontFamily: Wb.sans,
+                  fontSize: size > 32 ? 14 : 13,
+                  height: 1,
+                  color: hover ? Wb.ink : Wb.muted3,
+                ),
+              ),
       ),
     );
   }
@@ -130,7 +143,12 @@ class WbPill extends StatelessWidget {
             children: [
               if (leading != null) ...[
                 DefaultTextStyle(
-                  style: TextStyle(fontFamily: Wb.sans, fontSize: 14, color: fg, height: 1),
+                  style: TextStyle(
+                    fontFamily: Wb.sans,
+                    fontSize: 14,
+                    color: fg,
+                    height: 1,
+                  ),
                   child: leading!,
                 ),
                 const SizedBox(width: 7),
@@ -235,7 +253,10 @@ class SegmentedTabs extends StatelessWidget {
                 final on = i == index;
                 return AnimatedContainer(
                   duration: const Duration(milliseconds: 130),
-                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 14,
+                    vertical: 6,
+                  ),
                   decoration: BoxDecoration(
                     color: on ? Wb.cream : Colors.transparent,
                     borderRadius: BorderRadius.circular(Wb.rSm),
@@ -271,7 +292,10 @@ class LegendDot extends StatelessWidget {
         Container(
           width: 9,
           height: 9,
-          decoration: BoxDecoration(color: color, borderRadius: BorderRadius.circular(3)),
+          decoration: BoxDecoration(
+            color: color,
+            borderRadius: BorderRadius.circular(3),
+          ),
         ),
         const SizedBox(width: 6),
         Text(label, style: Wb.ui(size: 11.5, color: Wb.muted3)),
@@ -297,12 +321,16 @@ class StepperChip extends StatelessWidget {
     return Row(
       mainAxisSize: MainAxisSize.min,
       children: [
-        _sq(onMinus, '−'),
+        _sq(onMinus, '–'),
         Padding(
           padding: const EdgeInsets.symmetric(horizontal: 5),
-          child: Text(label, style: Wb.code(size: 13, color: danger ? Wb.accent : Wb.ink)),
+          child: Text(
+            label,
+            style: Wb.code(size: 13, color: danger ? Wb.accent : Wb.ink),
+          ),
         ),
-        _sq(onPlus, '＋'),
+        // `＋` (fullwidth) is tofu in Inter; the ASCII one is not.
+        _sq(onPlus, '+'),
       ],
     );
   }

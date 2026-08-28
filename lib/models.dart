@@ -4,6 +4,12 @@ import 'package:flutter/material.dart';
 
 import 'theme.dart';
 
+/// The fallback day, used when nothing has been punched at all.
+///
+/// ⚠️ **A window is derived from the punches wherever there are any** — see
+/// `DayWindow.of`. A hardcoded 07:30 drops the 06:30 opener: the shift exists,
+/// the board simply cannot draw it, which is the worst way for a scheduler to
+/// be wrong.
 const kDayStart = 7.5;
 const kDayEnd = 19.0;
 const kDaySpan = kDayEnd - kDayStart;
@@ -46,12 +52,12 @@ enum MonthMode { hours, crew, status }
 enum ApprovalStatus { approved, submitted, draft, closed }
 
 JobTone toneOf(JobKind k) => switch (k) {
-      JobKind.screen => JobTones.screen,
-      JobKind.battery => JobTones.battery,
-      JobKind.board => JobTones.board,
-      JobKind.water => JobTones.water,
-      JobKind.diag => JobTones.diag,
-    };
+  JobKind.screen => JobTones.screen,
+  JobKind.battery => JobTones.battery,
+  JobKind.board => JobTones.board,
+  JobKind.water => JobTones.water,
+  JobKind.diag => JobTones.diag,
+};
 
 /// A bench technician. [id] is the stable key other apps use for clock in/out.
 class Technician {
@@ -104,12 +110,57 @@ class RepairJob {
 }
 
 class ClockHours {
-  const ClockHours({required this.inHour, required this.outHour, required this.breakAt});
+  const ClockHours({
+    required this.inHour,
+    required this.outHour,
+    required this.breakAt,
+    this.open = false,
+  });
+
   final double inHour, outHour, breakAt;
+
+  /// The run began before this day's midnight — a shift somebody started
+  /// yesterday and never closed. Drawn clipped to the left edge.
+  bool get entersDay => inHour < 0;
+
+  /// **Nobody clocked out of this one.** [outHour] is then a *cap* — where the
+  /// clock had got to when it was read — not a punch somebody made.
+  ///
+  /// It earns its own flag because an open run and a settled one are drawn as
+  /// different things, not as two shades of one: time that is on the clock is
+  /// solid, time nobody has confirmed is dotted. `RxTrackBar`'s rule in
+  /// RepairX, and the reason this app can show the state at all.
+  final bool open;
+
   double get paid => outHour - inHour;
   bool get overtime => paid > 8;
   bool get hasBreak => breakAt > 0;
+
+  /// Somebody is on shift *right now*: open, and the clock has not run past
+  /// what a shift plausibly is.
+  ///
+  /// ⚠️ **From the punch stream alone, running and forgotten are the same
+  /// event.** Only elapsed time separates them, which is why this is the one
+  /// place that line is drawn — and why it is generous. A double shift, an
+  /// overnight recovery and a stocktake past closing are all real; calling one
+  /// an error trains people to ignore the flag.
+  bool get live => open && paid < kImplausibleShift;
+
+  /// Open long enough that nobody is standing in it.
+  bool get forgotten => open && !live;
 }
+
+/// Sixteen hours, not eight. See [ClockHours.live].
+const double kImplausibleShift = 16;
+
+/// Snap a hairline to the pixel grid.
+///
+/// ⚠️ Skia spreads a 1px line drawn at a fractional x across two columns at
+/// about half strength each — every rule on the board drawn at half its weight
+/// and twice its width, which reads as blur rather than as a fainter line.
+/// Bars are deliberately **not** snapped: a bar's edges are the data, and
+/// rounding 07:12 to the nearest pixel is rounding the punch.
+double crispLine(double x) => x.floorToDouble() + 0.5;
 
 class DayMeta {
   const DayMeta({
@@ -263,33 +314,123 @@ class ClockResult {
 
 const jobSeeds = <List<JobSeed>>[
   [
-    JobSeed(title: 'iPhone 14 Pro · glass', kind: JobKind.screen, start: 8, duration: 2.5, rate: 95),
-    JobSeed(title: 'Pixel 8 · board rework', kind: JobKind.board, start: 11, duration: 3.5, rate: 140),
-    JobSeed(title: 'Intake triage', kind: JobKind.diag, start: 15, duration: 1.5, rate: 70),
+    JobSeed(
+      title: 'iPhone 14 Pro · glass',
+      kind: JobKind.screen,
+      start: 8,
+      duration: 2.5,
+      rate: 95,
+    ),
+    JobSeed(
+      title: 'Pixel 8 · board rework',
+      kind: JobKind.board,
+      start: 11,
+      duration: 3.5,
+      rate: 140,
+    ),
+    JobSeed(
+      title: 'Intake triage',
+      kind: JobKind.diag,
+      start: 15,
+      duration: 1.5,
+      rate: 70,
+    ),
   ],
   [
-    JobSeed(title: 'MacBook A2338 · CPU line', kind: JobKind.board, start: 8.5, duration: 4, rate: 150),
-    JobSeed(title: 'S23 · charge port', kind: JobKind.board, start: 13, duration: 2.5, rate: 120),
+    JobSeed(
+      title: 'MacBook A2338 · CPU line',
+      kind: JobKind.board,
+      start: 8.5,
+      duration: 4,
+      rate: 150,
+    ),
+    JobSeed(
+      title: 'S23 · charge port',
+      kind: JobKind.board,
+      start: 13,
+      duration: 2.5,
+      rate: 120,
+    ),
   ],
   [
-    JobSeed(title: 'iPad 9 · digitizer ×3', kind: JobKind.screen, start: 8, duration: 4.5, rate: 88),
-    JobSeed(title: 'iPhone 12 · LCD swap', kind: JobKind.screen, start: 13.5, duration: 2, rate: 88),
+    JobSeed(
+      title: 'iPad 9 · digitizer ×3',
+      kind: JobKind.screen,
+      start: 8,
+      duration: 4.5,
+      rate: 88,
+    ),
+    JobSeed(
+      title: 'iPhone 12 · LCD swap',
+      kind: JobKind.screen,
+      start: 13.5,
+      duration: 2,
+      rate: 88,
+    ),
   ],
   [
-    JobSeed(title: 'Warranty diagnostics', kind: JobKind.diag, start: 9, duration: 3, rate: 70),
-    JobSeed(title: 'S22 Ultra · liquid', kind: JobKind.water, start: 12.5, duration: 3.5, rate: 110),
+    JobSeed(
+      title: 'Warranty diagnostics',
+      kind: JobKind.diag,
+      start: 9,
+      duration: 3,
+      rate: 70,
+    ),
+    JobSeed(
+      title: 'S22 Ultra · liquid',
+      kind: JobKind.water,
+      start: 12.5,
+      duration: 3.5,
+      rate: 110,
+    ),
   ],
   [
-    JobSeed(title: 'Battery bench · 6 units', kind: JobKind.battery, start: 8, duration: 3.5, rate: 60),
-    JobSeed(title: 'Pixel 7a · battery', kind: JobKind.battery, start: 12, duration: 1.5, rate: 60),
+    JobSeed(
+      title: 'Battery bench · 6 units',
+      kind: JobKind.battery,
+      start: 8,
+      duration: 3.5,
+      rate: 60,
+    ),
+    JobSeed(
+      title: 'Pixel 7a · battery',
+      kind: JobKind.battery,
+      start: 12,
+      duration: 1.5,
+      rate: 60,
+    ),
   ],
   [
-    JobSeed(title: 'QC pass · outbound', kind: JobKind.diag, start: 8.5, duration: 2, rate: 75),
-    JobSeed(title: 'iPhone 13 · water rescue', kind: JobKind.water, start: 11, duration: 4.5, rate: 110),
+    JobSeed(
+      title: 'QC pass · outbound',
+      kind: JobKind.diag,
+      start: 8.5,
+      duration: 2,
+      rate: 75,
+    ),
+    JobSeed(
+      title: 'iPhone 13 · water rescue',
+      kind: JobKind.water,
+      start: 11,
+      duration: 4.5,
+      rate: 110,
+    ),
   ],
   [
-    JobSeed(title: 'Chip-off recovery', kind: JobKind.board, start: 9.5, duration: 5, rate: 165),
-    JobSeed(title: 'Client handover', kind: JobKind.diag, start: 15, duration: 1, rate: 75),
+    JobSeed(
+      title: 'Chip-off recovery',
+      kind: JobKind.board,
+      start: 9.5,
+      duration: 5,
+      rate: 165,
+    ),
+    JobSeed(
+      title: 'Client handover',
+      kind: JobKind.diag,
+      start: 15,
+      duration: 1,
+      rate: 75,
+    ),
   ],
 ];
 
@@ -321,7 +462,15 @@ List<RepairJob> repairJobsFor(int workerIndex, int day, double clockIn) {
       1.0,
       math.min(4.5, math.min(kDayEnd - t, b.duration + jt.round() / 2)),
     );
-    out.add(RepairJob(title: b.title, kind: b.kind, start: t, duration: dur, rate: b.rate));
+    out.add(
+      RepairJob(
+        title: b.title,
+        kind: b.kind,
+        start: t,
+        duration: dur,
+        rate: b.rate,
+      ),
+    );
     t += dur + 0.5;
   }
   return out;
@@ -338,15 +487,24 @@ DayMeta dayMeta(int month, int day, {int technicianCount = 7}) {
   });
   final hours = (perTech.fold<double>(0, (a, b) => a + b) * 10).round() / 10;
   final ot =
-      (perTech.where((v) => v > 8).fold<double>(0, (a, v) => a + (v - 8)) * 10).round() / 10;
+      (perTech.where((v) => v > 8).fold<double>(0, (a, v) => a + (v - 8)) * 10)
+          .round() /
+      10;
   final status = crewN == 0
       ? ApprovalStatus.closed
       : day < 20
-          ? ApprovalStatus.approved
-          : day < 26
-              ? ApprovalStatus.submitted
-              : ApprovalStatus.draft;
-  return DayMeta(day: day, crewN: crewN, perTech: perTech, hours: hours, ot: ot, status: status);
+      ? ApprovalStatus.approved
+      : day < 26
+      ? ApprovalStatus.submitted
+      : ApprovalStatus.draft;
+  return DayMeta(
+    day: day,
+    crewN: crewN,
+    perTech: perTech,
+    hours: hours,
+    ot: ot,
+    status: status,
+  );
 }
 
 int daysInMonth(int month) => DateTime(kYear, month + 2, 0).day;
@@ -358,15 +516,101 @@ int monthStartOffset(int month) {
 }
 
 Color statusColor(ApprovalStatus s) => switch (s) {
-      ApprovalStatus.approved => Wb.forest,
-      ApprovalStatus.submitted => Wb.purple,
-      ApprovalStatus.draft => Wb.gold,
-      ApprovalStatus.closed => Wb.line,
-    };
+  ApprovalStatus.approved => Wb.forest,
+  ApprovalStatus.submitted => Wb.purple,
+  ApprovalStatus.draft => Wb.gold,
+  ApprovalStatus.closed => Wb.line,
+};
 
 String statusLabel(ApprovalStatus s) => switch (s) {
-      ApprovalStatus.approved => 'Approved',
-      ApprovalStatus.submitted => 'Submitted',
-      ApprovalStatus.draft => 'Draft',
-      ApprovalStatus.closed => 'Closed',
-    };
+  ApprovalStatus.approved => 'Approved',
+  ApprovalStatus.submitted => 'Submitted',
+  ApprovalStatus.draft => 'Draft',
+  ApprovalStatus.closed => 'Closed',
+};
+
+/// The hours a board draws, derived from what is actually on it.
+class DayWindow {
+  const DayWindow(this.start, this.end);
+
+  /// From the day's own clocks, whole hours, never narrower than [minSpan]
+  /// so a single short shift does not fill the width.
+  ///
+  /// ⚠️ **Only a punch may widen it.** An open run's *cap* is not evidence:
+  /// a shift nobody closed runs to now, so counted as a punch one forgotten
+  /// clock-out puts the whole board on a 24-hour axis and squashes every real
+  /// shift to a third of its width — the one thing the board exists to show
+  /// making everything else unreadable.
+  factory DayWindow.of(Iterable<ClockHours> clocks, {double minSpan = 8}) {
+    var lo = 24.0, hi = 0.0;
+    for (final c in clocks) {
+      if (c.paid <= 0) continue;
+      // ⚠️ **A run that entered from yesterday does not widen the day.** Its
+      // clock-in is before this midnight (a negative hour), and taking it as
+      // the day's start pulls the axis back into the small hours and squashes
+      // every real shift — the same failure an open run's *end* causes, one
+      // edge over.
+      if (c.inHour >= 0 && c.inHour < lo) lo = c.inHour;
+      if (!c.open && c.outHour > hi) hi = c.outHour;
+    }
+    if (lo > hi) return const DayWindow(kDayStart, kDayEnd);
+    lo = lo.floorToDouble();
+    hi = hi.ceilToDouble();
+    while (hi - lo < minSpan) {
+      if (hi < 24) hi += 1;
+      if (hi - lo >= minSpan) break;
+      if (lo > 0) lo -= 1;
+    }
+    return DayWindow(lo, hi);
+  }
+
+  final double start, end;
+  double get span => end - start;
+  double pctOf(double hour) => span <= 0 ? 0 : (hour - start) / span;
+}
+
+/// The same day, seen as **one technician's**.
+///
+/// ⚠️ This is what makes the self view reuse the admin month *unchanged*
+/// rather than fork it. A cell's cluster is one bar per technician; project
+/// the month down to a single slot and the identical grid draws one person's
+/// month, with every figure — hours, the week column, the totals — following
+/// automatically. Owner, 2026-08-27: *"utilize the same admin month view."*
+DayMeta onlyTech(DayMeta m, int index) {
+  final mine = index < m.perTech.length ? m.perTech[index] : 0.0;
+  return DayMeta(
+    day: m.day,
+    crewN: mine > 0 ? 1 : 0,
+    perTech: [
+      for (var i = 0; i < m.perTech.length; i++) i == index ? mine : 0.0,
+    ],
+    hours: mine,
+    // Overtime is per person, so it cannot be carried over from the bench's
+    // total — it is recomputed against the same eight-hour line.
+    ot: mine > 8 ? mine - 8 : 0,
+    status: m.status,
+  );
+}
+
+/// One technician's clock on one day of the month, derived from the same
+/// [dayMeta] the month grid reads.
+///
+/// One source for both, deliberately: a self view whose week disagreed with
+/// its own month by an hour would be two answers to one question.
+ClockHours? clockForDayOf(int index, int month, int day) {
+  final meta = dayMeta(month, day);
+  final hours = index < meta.perTech.length ? meta.perTech[index] : 0.0;
+  if (hours <= 0) return null;
+  // ⚠️ **The start has to move.** Keyed off the worker's own habit but
+  // nudged by the date, because a week where every bar begins at the same
+  // hour is a bar chart with dates down the side — the one thing a *schedule*
+  // is supposed to show is that Tuesday started late.
+  final w = workers[index];
+  final drift = ((day * 7 + index * 3) % 5) * 0.5;
+  final start = (w.clockIn.clamp(7.0, 10.0) + drift - 1).clamp(6.0, 11.0);
+  return ClockHours(
+    inHour: start,
+    outHour: start + hours,
+    breakAt: hours > 5 ? start + hours / 2 : 0,
+  );
+}

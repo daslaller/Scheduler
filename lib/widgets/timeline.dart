@@ -12,6 +12,8 @@ class BenchTimeline extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final isClock = ctrl.view == TimelineView.clock;
+    // Derived from what is on the board, not hardcoded — see [DayWindow].
+    final window = ctrl.window;
     return Container(
       decoration: BoxDecoration(
         color: Wb.cream,
@@ -23,8 +25,8 @@ class BenchTimeline extends StatelessWidget {
       child: Column(
         children: [
           _Toolbar(ctrl: ctrl, isClock: isClock),
-          _Ruler(),
-          _Rows(ctrl: ctrl, isClock: isClock),
+          _Ruler(window: window),
+          _Rows(ctrl: ctrl, isClock: isClock, window: window),
           _Coverage(ctrl: ctrl),
         ],
       ),
@@ -50,7 +52,9 @@ class _Toolbar extends StatelessWidget {
           SegmentedTabs(
             labels: const ['Clocked time', 'Repairs'],
             index: isClock ? 0 : 1,
-            onChanged: (i) => ctrl.setView(i == 0 ? TimelineView.clock : TimelineView.repairs),
+            onChanged: (i) => ctrl.setView(
+              i == 0 ? TimelineView.clock : TimelineView.repairs,
+            ),
           ),
           const SizedBox(width: 16),
           Expanded(
@@ -81,6 +85,9 @@ class _Toolbar extends StatelessWidget {
 }
 
 class _Ruler extends StatelessWidget {
+  const _Ruler({required this.window});
+  final DayWindow window;
+
   @override
   Widget build(BuildContext context) {
     return Padding(
@@ -94,14 +101,19 @@ class _Ruler extends StatelessWidget {
               child: LayoutBuilder(
                 builder: (context, box) {
                   final hours = <int>[];
-                  for (var h = kDayStart.ceil(); h < kDayEnd.floor(); h++) {
+                  for (
+                    var h = window.start.ceil();
+                    h < window.end.floor();
+                    h++
+                  ) {
                     hours.add(h);
                   }
                   return Stack(
                     children: [
                       for (var k = 0; k < hours.length; k++)
                         Positioned(
-                          left: hourToPct(hours[k].toDouble()) * box.maxWidth,
+                          left:
+                              window.pctOf(hours[k].toDouble()) * box.maxWidth,
                           top: 0,
                           bottom: 7,
                           child: Container(
@@ -135,9 +147,14 @@ class _Ruler extends StatelessWidget {
 }
 
 class _Rows extends StatelessWidget {
-  const _Rows({required this.ctrl, required this.isClock});
+  const _Rows({
+    required this.ctrl,
+    required this.isClock,
+    required this.window,
+  });
   final SchedulerController ctrl;
   final bool isClock;
+  final DayWindow window;
 
   @override
   Widget build(BuildContext context) {
@@ -156,10 +173,13 @@ class _Rows extends StatelessWidget {
                       index: i,
                       isClock: isClock,
                       trackWidth: trackW,
+                      window: window,
                     ),
                 ],
               ),
-              _NowLine(nowHour: ctrl.nowHour),
+              // Both: main's live clock, and the derived window it is placed
+              // against.
+              _NowLine(window: window, nowHour: ctrl.nowHour),
             ],
           );
         },
@@ -169,16 +189,19 @@ class _Rows extends StatelessWidget {
 }
 
 class _NowLine extends StatefulWidget {
-  const _NowLine({required this.nowHour});
+  const _NowLine({required this.window, required this.nowHour});
+  final DayWindow window;
   final double nowHour;
   @override
   State<_NowLine> createState() => _NowLineState();
 }
 
-class _NowLineState extends State<_NowLine> with SingleTickerProviderStateMixin {
-  late final AnimationController _pulse =
-      AnimationController(vsync: this, duration: const Duration(milliseconds: 1200))
-        ..repeat(reverse: true);
+class _NowLineState extends State<_NowLine>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _pulse = AnimationController(
+    vsync: this,
+    duration: const Duration(milliseconds: 1200),
+  )..repeat(reverse: true);
 
   @override
   void dispose() {
@@ -191,7 +214,12 @@ class _NowLineState extends State<_NowLine> with SingleTickerProviderStateMixin 
     return Positioned.fill(
       child: LayoutBuilder(
         builder: (context, box) {
-          final x = Wb.headWidth + hourToPct(widget.nowHour) * (box.maxWidth - Wb.headWidth);
+          // ⚠️ Placed against the **derived** window, not the hardcoded day:
+          // `hourToPct` divides by the fixed 07:30–19:00 span, so on a board
+          // whose axis was derived the line lands somewhere else entirely.
+          final x = Wb.headWidth +
+              widget.window.pctOf(widget.nowHour) *
+                  (box.maxWidth - Wb.headWidth);
           return IgnorePointer(
             child: Stack(
               clipBehavior: Clip.none,
@@ -215,7 +243,10 @@ class _NowLineState extends State<_NowLine> with SingleTickerProviderStateMixin 
                   left: x - 23,
                   top: -11,
                   child: Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 2),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 5,
+                      vertical: 2,
+                    ),
                     decoration: BoxDecoration(
                       color: Wb.primary,
                       borderRadius: BorderRadius.circular(Wb.rXs),
@@ -240,7 +271,10 @@ class _NowLineState extends State<_NowLine> with SingleTickerProviderStateMixin 
                     child: Container(
                       width: 8,
                       height: 8,
-                      decoration: const BoxDecoration(color: Wb.primary, shape: BoxShape.circle),
+                      decoration: const BoxDecoration(
+                        color: Wb.primary,
+                        shape: BoxShape.circle,
+                      ),
                     ),
                   ),
                 ),
@@ -259,11 +293,13 @@ class _TechRow extends StatelessWidget {
     required this.index,
     required this.isClock,
     required this.trackWidth,
+    required this.window,
   });
   final SchedulerController ctrl;
   final int index;
   final bool isClock;
   final double trackWidth;
+  final DayWindow window;
 
   @override
   Widget build(BuildContext context) {
@@ -271,104 +307,136 @@ class _TechRow extends StatelessWidget {
     final clock = ctrl.clockOf(index);
     final jobs = ctrl.jobsOf(index);
     final appointed = jobs.fold<double>(0, (a, j) => a + j.duration);
-    final overflow = jobs.fold<double>(0, (a, j) => a + (j.end > clock.outHour ? j.end - clock.outHour : 0));
+    final overflow = jobs.fold<double>(
+      0,
+      (a, j) => a + (j.end > clock.outHour ? j.end - clock.outHour : 0),
+    );
 
     return SizedBox(
       height: Wb.rowH,
       child: DecoratedBox(
-      decoration: const BoxDecoration(border: Border(top: BorderSide(color: Wb.hair))),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          HoverTap(
-            onTap: () => ctrl.openSheet(index),
-            builder: (_, hover) => AnimatedContainer(
-              duration: const Duration(milliseconds: 140),
-              width: Wb.headWidth,
-              padding: const EdgeInsets.fromLTRB(4, 9, 14, 9),
-              color: hover ? Wb.cream2 : Colors.transparent,
-              child: Row(
-                children: [
-                  WbAvatar(initial: w.initial, tint: w.tint),
-                  const SizedBox(width: 10),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        Text(
-                          w.name,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: Wb.ui(size: 13, weight: FontWeight.w600, tracking: -0.065),
-                        ),
-                        const SizedBox(height: 2),
-                        Text(
-                          w.role,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: Wb.kicker(size: 9.5, tracking: 0.09),
-                        ),
-                      ],
-                    ),
-                  ),
-                  if (isClock)
-                    StepperChip(
-                      onMinus: () => ctrl.nudge(index, inSide: false, delta: -0.5),
-                      onPlus: () => ctrl.nudge(index, inSide: false, delta: 0.5),
-                      label: '${clock.paid.toStringAsFixed(1)}h',
-                      danger: clock.overtime,
-                    )
-                  else
-                    Column(
-                      crossAxisAlignment: CrossAxisAlignment.end,
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        Text(
-                          '${jobs.length} ${jobs.length == 1 ? 'repair' : 'repairs'} · ${appointed.toStringAsFixed(1)}h',
-                          style: Wb.code(size: 12, color: Wb.body, tracking: -0.01),
-                        ),
-                        if (overflow > 0)
+        decoration: const BoxDecoration(
+          border: Border(top: BorderSide(color: Wb.hair)),
+        ),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            HoverTap(
+              onTap: () => ctrl.openSheet(index),
+              builder: (_, hover) => AnimatedContainer(
+                duration: const Duration(milliseconds: 140),
+                width: Wb.headWidth,
+                padding: const EdgeInsets.fromLTRB(4, 9, 14, 9),
+                color: hover ? Wb.cream2 : Colors.transparent,
+                child: Row(
+                  children: [
+                    WbAvatar(initial: w.initial, tint: w.tint),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
                           Text(
-                            '+${overflow.toStringAsFixed(1)}h past clock-out',
-                            style: Wb.code(size: 10, color: Wb.accent),
+                            w.name,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: Wb.ui(
+                              size: 13,
+                              weight: FontWeight.w600,
+                              tracking: -0.065,
+                            ),
                           ),
-                      ],
+                          const SizedBox(height: 2),
+                          Text(
+                            w.role,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: Wb.kicker(size: 9.5, tracking: 0.09),
+                          ),
+                        ],
+                      ),
                     ),
-                ],
+                    if (isClock)
+                      StepperChip(
+                        onMinus: () =>
+                            ctrl.nudge(index, inSide: false, delta: -0.5),
+                        onPlus: () =>
+                            ctrl.nudge(index, inSide: false, delta: 0.5),
+                        label: '${clock.paid.toStringAsFixed(1)}h',
+                        danger: clock.overtime,
+                      )
+                    else
+                      Column(
+                        crossAxisAlignment: CrossAxisAlignment.end,
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Text(
+                            '${jobs.length} ${jobs.length == 1 ? 'repair' : 'repairs'} · ${appointed.toStringAsFixed(1)}h',
+                            style: Wb.code(
+                              size: 12,
+                              color: Wb.body,
+                              tracking: -0.01,
+                            ),
+                          ),
+                          if (overflow > 0)
+                            Text(
+                              '+${overflow.toStringAsFixed(1)}h past clock-out',
+                              style: Wb.code(size: 10, color: Wb.accent),
+                            ),
+                        ],
+                      ),
+                  ],
+                ),
               ),
             ),
-          ),
-          SizedBox(
-            width: trackWidth,
-            height: Wb.rowH,
-            child: CustomPaint(
-              painter: const _HourGridPainter(),
-              child: isClock
-                  ? _ShiftTrack(ctrl: ctrl, index: index, clock: clock, width: trackWidth)
-                  : _JobTrack(ctrl: ctrl, index: index, clock: clock, jobs: jobs),
+            SizedBox(
+              width: trackWidth,
+              height: Wb.rowH,
+              child: CustomPaint(
+                painter: _HourGridPainter(window: window),
+                child: isClock
+                    ? _ShiftTrack(
+                        ctrl: ctrl,
+                        index: index,
+                        clock: clock,
+                        width: trackWidth,
+                        window: window,
+                      )
+                    : _JobTrack(
+                        ctrl: ctrl,
+                        index: index,
+                        clock: clock,
+                        jobs: jobs,
+                      ),
+              ),
             ),
-          ),
-        ],
-      ),
+          ],
+        ),
       ),
     );
   }
 }
 
 class _HourGridPainter extends CustomPainter {
-  const _HourGridPainter();
+  const _HourGridPainter({required this.window});
+  final DayWindow window;
+
   @override
   void paint(Canvas canvas, Size size) {
-    final p = Paint()..color = Wb.hair;
-    for (var h = kDayStart.ceil(); h <= kDayEnd.floor(); h++) {
-      final x = hourToPct(h.toDouble()) * size.width;
-      canvas.drawRect(Rect.fromLTWH(x, 0, 1, size.height), p);
+    final p = Paint()
+      ..color = Wb.hair
+      ..strokeWidth = 1;
+    for (var h = window.start.ceil(); h <= window.end.floor(); h++) {
+      // Snapped: an hour line at a fractional x is drawn at half weight
+      // across two columns, which reads as blur. See `crispLine`.
+      final x = crispLine(window.pctOf(h.toDouble()) * size.width);
+      canvas.drawLine(Offset(x, 0), Offset(x, size.height), p);
     }
   }
 
   @override
-  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
+  bool shouldRepaint(_HourGridPainter old) => old.window.start != window.start;
 }
 
 class _ShiftTrack extends StatelessWidget {
@@ -377,16 +445,24 @@ class _ShiftTrack extends StatelessWidget {
     required this.index,
     required this.clock,
     required this.width,
+    required this.window,
   });
   final SchedulerController ctrl;
   final int index;
   final ClockHours clock;
   final double width;
+  final DayWindow window;
 
   @override
   Widget build(BuildContext context) {
-    final left = hourToPct(clock.inHour);
-    final w = (clock.outHour - clock.inHour) / kDaySpan;
+    // ⚠️ Clamped: a shift that began before the drawn day — the shape a
+    // forgotten overnight punch takes — starts off the left edge, and the
+    // card clips it there rather than letting it lay out negative.
+    final left = window.pctOf(clock.inHour).clamp(0.0, 1.0);
+    final w = (window.pctOf(clock.outHour).clamp(0.0, 1.0) - left).clamp(
+      0.0,
+      1.0,
+    );
     final over = clock.overtime;
     return Stack(
       children: [
@@ -453,6 +529,19 @@ class _ShiftBarState extends State<_ShiftBar> {
   Widget build(BuildContext context) {
     final over = widget.overtime;
     final clock = widget.clock;
+    // ⚠️ **Three states, three marks — not three tints of one.**
+    //
+    //   settled  → solid, the shop's own colour
+    //   live     → solid, and it *shines*: something is happening in it
+    //   forgotten→ dotted, ending in nothing: committed, not yet real
+    //
+    // Hue cannot carry this on its own. A green bar and an amber bar are the
+    // same object seen twice; a dotted edge is the same mark in any palette,
+    // and it is the only one that survives a bar running the full width where
+    // its torn end is clipped to the frame.
+    final live = clock.live;
+    final forgotten = clock.forgotten;
+    final fg = forgotten ? Wb.accentDark : Wb.shiftFg;
     return MouseRegion(
       onEnter: (_) => setState(() => hover = true),
       onExit: (_) => setState(() => hover = false),
@@ -462,13 +551,29 @@ class _ShiftBarState extends State<_ShiftBar> {
         child: AnimatedContainer(
           duration: const Duration(milliseconds: 140),
           decoration: BoxDecoration(
-            color: over ? Wb.accentSoft : Wb.shiftBg,
+            color: forgotten
+                ? Wb.accentSoft
+                : over
+                ? Wb.accentSoft
+                : Wb.shiftBg,
             borderRadius: BorderRadius.circular(9),
-            border: Border.all(color: over ? Wb.accentBorder : Wb.shiftBd),
+            border: forgotten
+                // Dotted: nobody has said where this ends.
+                ? null
+                : Border.all(color: over ? Wb.accentBorder : Wb.shiftBd),
             boxShadow: hover
-                ? const [BoxShadow(color: Color(0x1F1D1C1A), blurRadius: 16, offset: Offset(0, 6))]
+                ? const [
+                    BoxShadow(
+                      color: Color(0x1F1D1C1A),
+                      blurRadius: 16,
+                      offset: Offset(0, 6),
+                    ),
+                  ]
                 : null,
           ),
+          foregroundDecoration: forgotten
+              ? const _DottedEdge(dotColor: Wb.accentHandle)
+              : null,
           clipBehavior: Clip.antiAlias,
           child: Stack(
             children: [
@@ -479,23 +584,37 @@ class _ShiftBarState extends State<_ShiftBar> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      '${formatHour(clock.inHour)} – ${formatHour(clock.outHour)}',
+                      forgotten
+                          ? (clock.entersDay
+                                ? 'from yesterday → no clock-out'
+                                : '${formatHour(clock.inHour)} → no clock-out')
+                          : live
+                          ? '${formatHour(clock.inHour)} → on shift'
+                          : '${formatHour(clock.inHour)} – ${formatHour(clock.outHour)}',
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                       style: Wb.code(
                         size: 12,
-                        color: over ? Wb.accentDark : Wb.shiftFg,
+                        color: over ? Wb.accentDark : fg,
                         tracking: -0.01,
                       ),
                     ),
                     Text(
-                      '${clock.paid.toStringAsFixed(1)}h on the clock${clock.hasBreak ? ' · 30m break' : ''}',
+                      // ⚠️ An open run's hours are **elapsed**, never
+                      // "worked": from the punch stream a running shift and a
+                      // forgotten one are the same event, and only a person
+                      // can tell them apart.
+                      '${clock.paid.toStringAsFixed(1)}h '
+                      '${clock.open ? 'elapsed' : 'on the clock'}'
+                      '${clock.hasBreak ? ' · 30m break' : ''}',
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                       style: Wb.ui(
                         size: 9.5,
                         weight: FontWeight.w500,
-                        color: (over ? Wb.accentDark : Wb.shiftFg).withValues(alpha: 0.75),
+                        color: (over ? Wb.accentDark : fg).withValues(
+                          alpha: 0.75,
+                        ),
                       ),
                     ),
                   ],
@@ -506,11 +625,15 @@ class _ShiftBarState extends State<_ShiftBar> {
                 color: over ? Wb.accentHandle : Wb.shiftHandle,
                 onDrag: (dx, w) => _apply(true, dx, w),
               ),
-              _Handle(
-                left: false,
-                color: over ? Wb.accentHandle : Wb.shiftHandle,
-                onDrag: (dx, w) => _apply(false, dx, w),
-              ),
+              // ⚠️ **No trailing handle on an open shift.** Dragging it would
+              // invent the missing clock-out — a fact about somebody's pay
+              // that nobody stated. Closing one is its own deliberate act.
+              if (!clock.open)
+                _Handle(
+                  left: false,
+                  color: over ? Wb.accentHandle : Wb.shiftHandle,
+                  onDrag: (dx, w) => _apply(false, dx, w),
+                ),
               if (clock.hasBreak) _BreakMarks(clock: clock, overtime: over),
             ],
           ),
@@ -521,7 +644,11 @@ class _ShiftBarState extends State<_ShiftBar> {
 }
 
 class _Handle extends StatelessWidget {
-  const _Handle({required this.left, required this.color, required this.onDrag});
+  const _Handle({
+    required this.left,
+    required this.color,
+    required this.onDrag,
+  });
   final bool left;
   final Color color;
   final void Function(double dx, double width) onDrag;
@@ -551,7 +678,10 @@ class _Handle extends StatelessWidget {
               margin: const EdgeInsets.symmetric(horizontal: 3),
               width: 3,
               height: 16,
-              decoration: BoxDecoration(color: color, borderRadius: BorderRadius.circular(2)),
+              decoration: BoxDecoration(
+                color: color,
+                borderRadius: BorderRadius.circular(2),
+              ),
             ),
           ),
         ),
@@ -652,10 +782,7 @@ class _HashPainter extends CustomPainter {
     for (var x = -size.height; x < size.width + size.height; x += 6) {
       canvas.drawLine(Offset(x, size.height), Offset(x + size.height, 0), p);
     }
-    canvas.drawRect(
-      Rect.fromLTWH(0, 0, 1, size.height),
-      Paint()..color = hash,
-    );
+    canvas.drawRect(Rect.fromLTWH(0, 0, 1, size.height), Paint()..color = hash);
     canvas.drawRect(
       Rect.fromLTWH(size.width - 1, 0, 1, size.height),
       Paint()..color = hash,
@@ -663,7 +790,8 @@ class _HashPainter extends CustomPainter {
   }
 
   @override
-  bool shouldRepaint(covariant _HashPainter oldDelegate) => oldDelegate.overtime != overtime;
+  bool shouldRepaint(covariant _HashPainter oldDelegate) =>
+      oldDelegate.overtime != overtime;
 }
 
 class _JobTrack extends StatelessWidget {
@@ -741,13 +869,21 @@ class _JobChipState extends State<_JobChip> {
         onTap: widget.onTap,
         child: AnimatedContainer(
           duration: const Duration(milliseconds: 140),
-          transform: hover ? Matrix4.translationValues(0, -1, 0) : Matrix4.identity(),
+          transform: hover
+              ? Matrix4.translationValues(0, -1, 0)
+              : Matrix4.identity(),
           decoration: BoxDecoration(
             color: past ? Wb.accentSoft : t.bg,
             borderRadius: BorderRadius.circular(10),
             border: Border.all(color: past ? Wb.accentBorder2 : t.bd),
             boxShadow: hover
-                ? const [BoxShadow(color: Color(0x211D1C1A), blurRadius: 18, offset: Offset(0, 8))]
+                ? const [
+                    BoxShadow(
+                      color: Color(0x211D1C1A),
+                      blurRadius: 18,
+                      offset: Offset(0, 8),
+                    ),
+                  ]
                 : null,
           ),
           clipBehavior: Clip.antiAlias,
@@ -763,32 +899,34 @@ class _JobChipState extends State<_JobChip> {
               Padding(
                 padding: const EdgeInsets.fromLTRB(11, 0, 7, 0),
                 child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    widget.job.title,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: Wb.ui(
-                      size: 12,
-                      weight: FontWeight.w600,
-                      tracking: -0.06,
-                      color: past ? Wb.accentDark : t.fg,
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      widget.job.title,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: Wb.ui(
+                        size: 12,
+                        weight: FontWeight.w600,
+                        tracking: -0.06,
+                        color: past ? Wb.accentDark : t.fg,
+                      ),
                     ),
-                  ),
-                  Text(
-                    '${formatHour(widget.job.start)}–${formatHour(widget.job.end)} · ${widget.job.duration.toStringAsFixed(1)}h · \$${widget.job.rate.toStringAsFixed(0)}/h',
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: Wb.code(
-                      size: 9.5,
-                      weight: FontWeight.w500,
-                      color: (past ? Wb.accentDark : t.fg).withValues(alpha: 0.8),
+                    Text(
+                      '${formatHour(widget.job.start)}–${formatHour(widget.job.end)} · ${widget.job.duration.toStringAsFixed(1)}h · \$${widget.job.rate.toStringAsFixed(0)}/h',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: Wb.code(
+                        size: 9.5,
+                        weight: FontWeight.w500,
+                        color: (past ? Wb.accentDark : t.fg).withValues(
+                          alpha: 0.8,
+                        ),
+                      ),
                     ),
-                  ),
-                ],
-              ),
+                  ],
+                ),
               ),
             ],
           ),
@@ -821,13 +959,16 @@ class _Coverage extends StatelessWidget {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text('BENCH COVERAGE', style: TextStyle(
-                    fontFamily: Wb.sans,
-                    fontSize: 10,
-                    fontWeight: FontWeight.w600,
-                    letterSpacing: 1.4,
-                    color: Wb.muted,
-                  )),
+                  Text(
+                    'BENCH COVERAGE',
+                    style: TextStyle(
+                      fontFamily: Wb.sans,
+                      fontSize: 10,
+                      fontWeight: FontWeight.w600,
+                      letterSpacing: 1.4,
+                      color: Wb.muted,
+                    ),
+                  ),
                   SizedBox(height: 4),
                   Text(
                     'Dashed line = 4 technicians minimum for the walk-in SLA',
@@ -861,9 +1002,12 @@ class _Coverage extends StatelessWidget {
                           child: Align(
                             alignment: Alignment.bottomCenter,
                             child: Container(
-                              height: (n / ctrl.technicians.length * 32).clamp(n == 0 ? 0 : 4, 58),
+                              height: (n / ctrl.technicians.length * 32)
+                                  .clamp(n == 0 ? 0 : 4, 58),
                               decoration: BoxDecoration(
-                                color: n < 4 ? Wb.coverageRed : Wb.coverageGreen,
+                                color: n < 4
+                                    ? Wb.coverageRed
+                                    : Wb.coverageGreen,
                                 borderRadius: const BorderRadius.vertical(
                                   top: Radius.circular(3),
                                   bottom: Radius.circular(1),
@@ -890,7 +1034,10 @@ class DashedLine extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return CustomPaint(painter: _DashPainter(color), size: const Size(double.infinity, 1));
+    return CustomPaint(
+      painter: _DashPainter(color),
+      size: const Size(double.infinity, 1),
+    );
   }
 }
 
@@ -906,11 +1053,55 @@ class _DashPainter extends CustomPainter {
     const gap = 3.0;
     var x = 0.0;
     while (x < size.width) {
-      canvas.drawLine(Offset(x, 0), Offset((x + dash).clamp(0, size.width), 0), p);
+      canvas.drawLine(
+        Offset(x, 0),
+        Offset((x + dash).clamp(0, size.width), 0),
+        p,
+      );
       x += dash + gap;
     }
   }
 
   @override
   bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
+}
+
+/// A dotted border, for a run whose end nobody has stated.
+class _DottedEdge extends BoxDecoration {
+  const _DottedEdge({required this.dotColor}) : super();
+
+  final Color dotColor;
+
+  @override
+  BoxPainter createBoxPainter([VoidCallback? onChanged]) =>
+      _DottedEdgePainter(dotColor);
+}
+
+class _DottedEdgePainter extends BoxPainter {
+  _DottedEdgePainter(this.color);
+  final Color color;
+
+  @override
+  void paint(Canvas canvas, Offset offset, ImageConfiguration cfg) {
+    final size = cfg.size;
+    if (size == null) return;
+    final rect = offset & size;
+    final rrect = RRect.fromRectAndRadius(
+      rect.deflate(0.75),
+      const Radius.circular(9),
+    );
+    final paint = Paint()
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 1.5
+      ..color = color;
+    final path = Path()..addRRect(rrect);
+    for (final metric in path.computeMetrics()) {
+      var d = 0.0;
+      while (d < metric.length) {
+        final end = (d + 4).clamp(0.0, metric.length);
+        canvas.drawPath(metric.extractPath(d, end), paint);
+        d += 7;
+      }
+    }
+  }
 }
