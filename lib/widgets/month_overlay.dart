@@ -161,9 +161,16 @@ class MonthOverlay extends StatelessWidget {
                               child: Row(
                                 mainAxisSize: MainAxisSize.min,
                                 children: [
+                                  // ⚠️ The **Approval lens** goes too. Its
+                                  // cells read a status this package does not
+                                  // derive from a host's hours, so over a real
+                                  // history it is a tab that reports nothing.
                                   SegmentedTabs(
-                                    labels: const ['Hours', 'Crew', 'Approval'],
-                                    index: mode.index,
+                                    labels: ctrl.hasHistory
+                                        ? const ['Hours', 'Crew']
+                                        : const ['Hours', 'Crew', 'Approval'],
+                                    index: mode.index.clamp(
+                                        0, ctrl.hasHistory ? 1 : 2),
                                     onChanged: (i) =>
                                         ctrl.setMonthMode(MonthMode.values[i]),
                                   ),
@@ -251,18 +258,24 @@ class MonthOverlay extends StatelessWidget {
                                     style: Wb.ui(size: 11.5, color: Wb.muted2),
                                   ),
                                 ),
-                                const LegendDot(
-                                  color: Wb.forest,
-                                  label: 'Approved',
-                                ),
-                                const SizedBox(width: 13),
-                                const LegendDot(
-                                  color: Wb.purple,
-                                  label: 'Submitted',
-                                ),
-                                const SizedBox(width: 13),
-                                const LegendDot(color: Wb.gold, label: 'Draft'),
-                                const SizedBox(width: 13),
+                                // ⚠️ **No approval key over a real history.**
+                                // `dayMetaFrom` invents no sign-off state, so
+                                // these would name three colours that never
+                                // appear on the grid.
+                                if (!ctrl.hasHistory) ...const [
+                                  LegendDot(
+                                    color: Wb.forest,
+                                    label: 'Approved',
+                                  ),
+                                  SizedBox(width: 13),
+                                  LegendDot(
+                                    color: Wb.purple,
+                                    label: 'Submitted',
+                                  ),
+                                  SizedBox(width: 13),
+                                  LegendDot(color: Wb.gold, label: 'Draft'),
+                                  SizedBox(width: 13),
+                                ],
                                 const LegendDot(
                                   color: Wb.accent,
                                   label: 'Overtime',
