@@ -40,11 +40,15 @@ class MonthOverlay extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final dim = ctrl.lastDay;
+    // main's roster is `ctrl.technicians`, not the const `workers`; the
+    // projection rides on top of it unchanged.
     final metas = {
       for (var d = 1; d <= dim; d++)
-        d: onlyWorker == null
-            ? dayMeta(ctrl.month, d)
-            : onlyTech(dayMeta(ctrl.month, d), onlyWorker!),
+        d: () {
+          final m =
+              dayMeta(ctrl.month, d, technicianCount: ctrl.technicians.length);
+          return onlyWorker == null ? m : onlyTech(m, onlyWorker!);
+        }(),
     };
     final all = metas.values.toList();
     final monthHours = all.fold<double>(0, (a, m) => a + m.hours);
@@ -56,7 +60,7 @@ class MonthOverlay extends StatelessWidget {
     final mode = ctrl.monthMode;
     final offset = monthStartOffset(ctrl.month);
     final weekCount = ((offset + dim) / 7).ceil();
-    final cap = (onlyWorker == null ? workers.length : 1) * 8.5;
+    final cap = (onlyWorker == null ? ctrl.technicians.length : 1) * 8.5;
     // One person's own busiest day, so their bars are read against themselves
     // rather than against the shop's biggest worker.
     final myPeak = all.fold<double>(0, (a, m) => m.hours > a ? m.hours : a);
@@ -568,9 +572,8 @@ class _DayCell extends StatelessWidget {
                             decoration: BoxDecoration(
                               color: m.ot > 0
                                   ? Wb.accent
-                                  : workers[onlyWorker!].tint.withValues(
-                                      alpha: 0.55,
-                                    ),
+                                  : ctrl.technicians[onlyWorker!].tint
+                                      .withValues(alpha: 0.55),
                               borderRadius: BorderRadius.circular(2),
                             ),
                           ),
@@ -590,12 +593,12 @@ class _DayCell extends StatelessWidget {
                                   color: m.perTech[x] > 8
                                       ? Wb.accent
                                       : m.perTech[x] > 0
-                                      ? workers[x].tint.withValues(
-                                          alpha: mode == MonthMode.crew
-                                              ? 0.8
-                                              : 0.4,
-                                        )
-                                      : Wb.hair,
+                                          ? ctrl.technicians[x].tint.withValues(
+                                              alpha: mode == MonthMode.crew
+                                                  ? 0.8
+                                                  : 0.4,
+                                            )
+                                          : Wb.hair,
                                   borderRadius: BorderRadius.circular(2),
                                 ),
                               ),
@@ -622,19 +625,20 @@ class _DayCell extends StatelessWidget {
                         alignment: Alignment.center,
                         decoration: BoxDecoration(
                           shape: BoxShape.circle,
-                          color: workers[x].tint.withValues(alpha: 0.15),
+                          color: ctrl.technicians[x].tint
+                              .withValues(alpha: 0.15),
                           border: Border.all(
                             color: selected ? Wb.peach : Wb.cream,
                             width: 1.5,
                           ),
                         ),
                         child: Text(
-                          workers[x].initial[0],
+                          ctrl.technicians[x].initial[0],
                           style: TextStyle(
                             fontFamily: Wb.sans,
                             fontSize: 8.5,
                             fontWeight: FontWeight.w700,
-                            color: workers[x].tint,
+                            color: ctrl.technicians[x].tint,
                             height: 1,
                           ),
                         ),

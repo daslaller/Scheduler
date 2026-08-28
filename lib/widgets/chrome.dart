@@ -153,14 +153,29 @@ class WbPill extends StatelessWidget {
                 ),
                 const SizedBox(width: 7),
               ],
-              Text(
-                label,
-                style: Wb.ui(
-                  size: 12.5,
-                  weight: filled || peach ? FontWeight.w600 : FontWeight.w500,
-                  color: fg,
+              if (expand)
+                Flexible(
+                  child: Text(
+                    label,
+                    overflow: TextOverflow.ellipsis,
+                    maxLines: 1,
+                    textAlign: TextAlign.center,
+                    style: Wb.ui(
+                      size: 12.5,
+                      weight: filled || peach ? FontWeight.w600 : FontWeight.w500,
+                      color: fg,
+                    ),
+                  ),
+                )
+              else
+                Text(
+                  label,
+                  style: Wb.ui(
+                    size: 12.5,
+                    weight: filled || peach ? FontWeight.w600 : FontWeight.w500,
+                    color: fg,
+                  ),
                 ),
-              ),
             ],
           ),
         );

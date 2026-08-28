@@ -13,7 +13,7 @@ class TechSheet extends StatelessWidget {
   Widget build(BuildContext context) {
     final i = ctrl.sheetIndex;
     if (i == null) return const SizedBox.shrink();
-    final w = workers[i];
+    final w = ctrl.technicians[i];
     final clock = ctrl.clockOf(i);
     final jobs = ctrl.jobsOf(i);
     final week = ctrl.weekLoad(i);
@@ -49,7 +49,9 @@ class TechSheet extends StatelessWidget {
             ),
             clipBehavior: Clip.antiAlias,
             child: Container(
-              decoration: BoxDecoration(boxShadow: Wb.overlayShadow),
+              decoration: BoxDecoration(
+                boxShadow: Wb.overlayShadow,
+              ),
               child: Column(
                 children: [
                   Container(
@@ -63,12 +65,7 @@ class TechSheet extends StatelessWidget {
                         Row(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            WbAvatar(
-                              initial: w.initial,
-                              tint: w.tint,
-                              size: 46,
-                              radius: 13,
-                            ),
+                            WbAvatar(initial: w.initial, tint: w.tint, size: 46, radius: 13),
                             const SizedBox(width: 13),
                             Expanded(
                               child: Column(
@@ -80,14 +77,19 @@ class TechSheet extends StatelessWidget {
                                     '${w.role} · ${w.cert}',
                                     style: Wb.kicker(size: 10, tracking: 0.12),
                                   ),
+                                  const SizedBox(height: 6),
+                                  Text(
+                                    ctrl.isOnTheClock(w.id) ? 'On the clock' : 'Off the clock',
+                                    style: Wb.ui(
+                                      size: 11,
+                                      weight: FontWeight.w600,
+                                      color: ctrl.isOnTheClock(w.id) ? Wb.forest : Wb.muted2,
+                                    ),
+                                  ),
                                 ],
                               ),
                             ),
-                            WbCircleBtn(
-                              icon: Icons.close,
-                              onTap: ctrl.closeSheet,
-                              size: 30,
-                            ),
+                            WbCircleBtn(glyph: '✕', onTap: ctrl.closeSheet, size: 30),
                           ],
                         ),
                         const SizedBox(height: 17),
@@ -97,24 +99,14 @@ class TechSheet extends StatelessWidget {
                             color: Wb.line2,
                             child: Row(
                               children: [
-                                _MiniStat(
-                                  label: 'Today',
-                                  value: '${clock.paid.toStringAsFixed(1)}h',
-                                ),
-                                _MiniStat(
-                                  label: 'Week',
-                                  value: '${weekTotal.toStringAsFixed(1)}h',
-                                ),
+                                _MiniStat(label: 'Today', value: '${clock.paid.toStringAsFixed(1)}h'),
+                                _MiniStat(label: 'Week', value: '${weekTotal.toStringAsFixed(1)}h'),
                                 _MiniStat(
                                   label: 'Overtime',
-                                  value:
-                                      '${(clock.overtime ? clock.paid - 8 : 0).toStringAsFixed(1)}h',
+                                  value: '${(clock.overtime ? clock.paid - 8 : 0).toStringAsFixed(1)}h',
                                   warn: clock.overtime,
                                 ),
-                                _MiniStat(
-                                  label: 'Breaks',
-                                  value: clock.hasBreak ? '30m' : '—',
-                                ),
+                                _MiniStat(label: 'Breaks', value: clock.hasBreak ? '30m' : '—'),
                               ],
                             ),
                           ),
@@ -126,11 +118,14 @@ class TechSheet extends StatelessWidget {
                     child: ListView(
                       padding: const EdgeInsets.fromLTRB(24, 19, 24, 19),
                       children: [
-                        SegmentedTabs(
-                          labels: const ['Clocked time', 'Appointed work'],
-                          index: showClock ? 0 : 1,
-                          onChanged: (v) => ctrl.setSheetTab(
-                            v == 0 ? SheetTab.clock : SheetTab.work,
+                        FittedBox(
+                          fit: BoxFit.scaleDown,
+                          alignment: Alignment.centerLeft,
+                          child: SegmentedTabs(
+                            labels: const ['Clocked time', 'Appointed work'],
+                            index: showClock ? 0 : 1,
+                            onChanged: (v) =>
+                                ctrl.setSheetTab(v == 0 ? SheetTab.clock : SheetTab.work),
                           ),
                         ),
                         const SizedBox(height: 16),
@@ -143,66 +138,73 @@ class TechSheet extends StatelessWidget {
                           _ClockStepper(
                             label: 'Clock in',
                             value: formatHour(clock.inHour),
-                            onMinus: () =>
-                                ctrl.nudge(i, inSide: true, delta: -0.5),
-                            onPlus: () =>
-                                ctrl.nudge(i, inSide: true, delta: 0.5),
+                            onMinus: () => ctrl.nudge(i, inSide: true, delta: -0.5),
+                            onPlus: () => ctrl.nudge(i, inSide: true, delta: 0.5),
                           ),
                           const SizedBox(height: 9),
                           _ClockStepper(
                             label: 'Clock out',
                             value: formatHour(clock.outHour),
-                            onMinus: () =>
-                                ctrl.nudge(i, inSide: false, delta: -0.5),
-                            onPlus: () =>
-                                ctrl.nudge(i, inSide: false, delta: 0.5),
+                            onMinus: () => ctrl.nudge(i, inSide: false, delta: -0.5),
+                            onPlus: () => ctrl.nudge(i, inSide: false, delta: 0.5),
+                          ),
+                          const SizedBox(height: 12),
+                          Row(
+                            children: [
+                              Expanded(
+                                child: WbPill(
+                                  label: 'Clock in',
+                                  expand: true,
+                                  onTap: () => ctrl.clockIn(w.id),
+                                ),
+                              ),
+                              const SizedBox(width: 9),
+                              Expanded(
+                                child: WbPill(
+                                  label: 'Clock out',
+                                  filled: true,
+                                  expand: true,
+                                  onTap: () => ctrl.clockOut(w.id),
+                                ),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 10),
+                          Text(
+                            ctrl.isOnTheClock(w.id)
+                                ? 'Punched in — clock out here or from POS'
+                                : 'Punched out — clock in here or from POS',
+                            style: Wb.ui(size: 11, color: Wb.muted2, height: 1.35),
                           ),
                           const SizedBox(height: 18),
-                          Text(
-                            'Week load',
-                            style: Wb.kicker(size: 10, tracking: 0.13),
-                          ),
+                          Text('Week load', style: Wb.kicker(size: 10, tracking: 0.13)),
                           const SizedBox(height: 12),
                           _WeekBars(values: week, highlight: 4),
                         ] else ...[
                           Container(
                             margin: const EdgeInsets.only(bottom: 14),
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 14,
-                              vertical: 13,
-                            ),
+                            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 13),
                             decoration: BoxDecoration(
                               color: delta > 0.25 ? Wb.accentSoft : Wb.cream2,
                               borderRadius: BorderRadius.circular(12),
                               border: Border.all(
-                                color: delta > 0.25
-                                    ? Wb.accentBorder2
-                                    : Wb.line2,
+                                color: delta > 0.25 ? Wb.accentBorder2 : Wb.line2,
                               ),
                             ),
                             child: Row(
                               children: [
                                 Expanded(
                                   child: Column(
-                                    crossAxisAlignment:
-                                        CrossAxisAlignment.start,
+                                    crossAxisAlignment: CrossAxisAlignment.start,
                                     children: [
                                       Text(
                                         'Expected finish ${formatHour(expectedEnd)}',
-                                        style: Wb.ui(
-                                          size: 13,
-                                          weight: FontWeight.w600,
-                                          tracking: -0.065,
-                                        ),
+                                        style: Wb.ui(size: 13, weight: FontWeight.w600, tracking: -0.065),
                                       ),
                                       const SizedBox(height: 4),
                                       Text(
                                         '${appointed.toStringAsFixed(1)}h of appointed work against ${clock.paid.toStringAsFixed(1)}h clocked',
-                                        style: Wb.ui(
-                                          size: 11,
-                                          color: Wb.muted2,
-                                          height: 1.35,
-                                        ),
+                                        style: Wb.ui(size: 11, color: Wb.muted2, height: 1.35),
                                       ),
                                     ],
                                   ),
@@ -217,14 +219,11 @@ class TechSheet extends StatelessWidget {
                                         color: delta > 0.25
                                             ? Wb.accent
                                             : delta < -0.25
-                                            ? Wb.toneSuccessFg
-                                            : Wb.ink,
+                                                ? Wb.toneSuccessFg
+                                                : Wb.ink,
                                       ),
                                     ),
-                                    Text(
-                                      'vs clocked',
-                                      style: Wb.kicker(size: 9, tracking: 0.1),
-                                    ),
+                                    Text('vs clocked', style: Wb.kicker(size: 9, tracking: 0.1)),
                                   ],
                                 ),
                               ],
@@ -233,21 +232,14 @@ class TechSheet extends StatelessWidget {
                           for (var j = 0; j < jobs.length; j++)
                             Padding(
                               padding: const EdgeInsets.only(bottom: 9),
-                              child: _JobRow(
-                                job: jobs[j],
-                                index: j,
-                                past: jobs[j].end > clock.outHour + 0.01,
-                              ),
+                              child: _JobRow(job: jobs[j], index: j, past: jobs[j].end > clock.outHour + 0.01),
                             ),
                         ],
                       ],
                     ),
                   ),
                   Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 24,
-                      vertical: 15,
-                    ),
+                    padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 15),
                     decoration: const BoxDecoration(
                       color: Wb.cream2,
                       border: Border(top: BorderSide(color: Wb.line2)),
@@ -278,11 +270,7 @@ class TechSheet extends StatelessWidget {
 }
 
 class _MiniStat extends StatelessWidget {
-  const _MiniStat({
-    required this.label,
-    required this.value,
-    this.warn = false,
-  });
+  const _MiniStat({required this.label, required this.value, this.warn = false});
   final String label, value;
   final bool warn;
 
@@ -297,10 +285,7 @@ class _MiniStat extends StatelessWidget {
           children: [
             Text(label, style: Wb.kicker(size: 9, tracking: 0.11)),
             const SizedBox(height: 3),
-            Text(
-              value,
-              style: Wb.code(size: 17, color: warn ? Wb.accent : Wb.ink),
-            ),
+            Text(value, style: Wb.code(size: 17, color: warn ? Wb.accent : Wb.ink)),
           ],
         ),
       ),
@@ -339,7 +324,7 @@ class _ClockStepper extends StatelessWidget {
               ],
             ),
           ),
-          _sq(onMinus, '–'),
+          _sq(onMinus, '−'),
           const SizedBox(width: 8),
           _sq(onPlus, '+'),
         ],
@@ -377,24 +362,24 @@ class _JobRow extends StatelessWidget {
     final st = past
         ? 'Past clock-out'
         : index == 0
-        ? 'Approved'
-        : index == 1
-        ? 'Submitted'
-        : 'Draft';
+            ? 'Approved'
+            : index == 1
+                ? 'Submitted'
+                : 'Draft';
     final bg = past
         ? Wb.accentSoft
         : st == 'Approved'
-        ? Wb.toneSuccessBg
-        : st == 'Submitted'
-        ? Wb.toneInfoBg
-        : Wb.toneNeutralBg;
+            ? Wb.toneSuccessBg
+            : st == 'Submitted'
+                ? Wb.toneInfoBg
+                : Wb.toneNeutralBg;
     final fg = past
         ? Wb.accentDark
         : st == 'Approved'
-        ? Wb.toneSuccessFg
-        : st == 'Submitted'
-        ? Wb.toneInfoFg
-        : Wb.toneNeutralFg;
+            ? Wb.toneSuccessFg
+            : st == 'Submitted'
+                ? Wb.toneInfoFg
+                : Wb.toneNeutralFg;
 
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 13, vertical: 12),
@@ -408,42 +393,25 @@ class _JobRow extends StatelessWidget {
           Container(
             width: 3,
             height: 36,
-            decoration: BoxDecoration(
-              color: t.rail,
-              borderRadius: BorderRadius.circular(3),
-            ),
+            decoration: BoxDecoration(color: t.rail, borderRadius: BorderRadius.circular(3)),
           ),
           const SizedBox(width: 12),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(
-                  job.title,
-                  style: Wb.ui(
-                    size: 13,
-                    weight: FontWeight.w600,
-                    tracking: -0.065,
-                  ),
-                ),
+                Text(job.title, style: Wb.ui(size: 13, weight: FontWeight.w600, tracking: -0.065)),
                 const SizedBox(height: 4),
                 Text(
                   '${formatHour(job.start)}–${formatHour(job.end)} · ${job.duration.toStringAsFixed(1)}h · \$${(job.duration * job.rate).round()}',
-                  style: Wb.code(
-                    size: 10.5,
-                    weight: FontWeight.w500,
-                    color: Wb.muted2,
-                  ),
+                  style: Wb.code(size: 10.5, weight: FontWeight.w500, color: Wb.muted2),
                 ),
               ],
             ),
           ),
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 4),
-            decoration: BoxDecoration(
-              color: bg,
-              borderRadius: BorderRadius.circular(6),
-            ),
+            decoration: BoxDecoration(color: bg, borderRadius: BorderRadius.circular(6)),
             child: Text(
               st,
               style: TextStyle(
@@ -488,11 +456,7 @@ class _WeekBars extends StatelessWidget {
                   children: [
                     Text(
                       values[k] == 0 ? '—' : values[k].toStringAsFixed(1),
-                      style: Wb.code(
-                        size: 9.5,
-                        weight: FontWeight.w500,
-                        color: Wb.muted2,
-                      ),
+                      style: Wb.code(size: 9.5, weight: FontWeight.w500, color: Wb.muted2),
                     ),
                     const SizedBox(height: 4),
                     Expanded(
@@ -500,16 +464,14 @@ class _WeekBars extends StatelessWidget {
                         alignment: Alignment.bottomCenter,
                         child: FractionallySizedBox(
                           widthFactor: 1,
-                          heightFactor: values[k] <= 0
-                              ? 0.08
-                              : (values[k] / 10).clamp(0.08, 1),
+                          heightFactor: values[k] <= 0 ? 0.08 : (values[k] / 10).clamp(0.08, 1),
                           child: DecoratedBox(
                             decoration: BoxDecoration(
                               color: values[k] > 8
                                   ? Wb.accent
                                   : values[k] > 0
-                                  ? Wb.coverageGreen
-                                  : Wb.line2,
+                                      ? Wb.coverageGreen
+                                      : Wb.line2,
                               borderRadius: const BorderRadius.vertical(
                                 top: Radius.circular(4),
                                 bottom: Radius.circular(2),

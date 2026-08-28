@@ -13,10 +13,9 @@ import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:northline_schedule/controller.dart';
-import 'package:northline_schedule/theme.dart';
-import 'package:northline_schedule/widgets/month_overlay.dart';
-import 'package:northline_schedule/workbench_page.dart';
+import 'package:rx_scheduler/theme.dart';
+import 'package:rx_scheduler/widgets/month_overlay.dart';
+import 'package:rx_scheduler/scheduler.dart';
 
 final _boundary = GlobalKey();
 
@@ -27,11 +26,11 @@ void main() {
   });
 
   testWidgets('1 — the admin planner', (tester) async {
-    final ctrl = SchedulerController();
+    final ctrl = RxSchedulerController();
     await _pump(
       tester,
       const Size(1420, 1000),
-      WorkbenchPage(controller: ctrl),
+      RxScheduler(controller: ctrl),
     );
     expect(find.text('Monday 24 August'), findsOneWidget);
     // The two open shifts, told apart: one is somebody at the counter, the
@@ -45,11 +44,11 @@ void main() {
   });
 
   testWidgets('2 — the admin month, as a modal', (tester) async {
-    final ctrl = SchedulerController();
+    final ctrl = RxSchedulerController();
     await _pump(
       tester,
       const Size(1420, 1000),
-      WorkbenchPage(controller: ctrl),
+      RxScheduler(controller: ctrl),
     );
     await tester.tap(find.text('Month overlay'));
     // ⚠️ Never `pumpAndSettle` on this app: the now line pulses forever, so
@@ -63,8 +62,8 @@ void main() {
   });
 
   testWidgets('3 — the self view', (tester) async {
-    final ctrl = SchedulerController()..showSelf(true);
-    await _pump(tester, const Size(1180, 700), WorkbenchPage(controller: ctrl));
+    final ctrl = RxSchedulerController()..showSelf(true);
+    await _pump(tester, const Size(1180, 700), RxScheduler(controller: ctrl));
     expect(find.text('MY SCHEDULE'), findsOneWidget);
     expect(find.text('Alex Kim (you)'), findsOneWidget);
     // Every day in the week holds a lane, worked or not.
@@ -77,11 +76,11 @@ void main() {
   testWidgets('4 — the self month is the admin month, one person wide', (
     tester,
   ) async {
-    final ctrl = SchedulerController()..showSelf(true);
+    final ctrl = RxSchedulerController()..showSelf(true);
     await _pump(
       tester,
       const Size(1420, 1000),
-      WorkbenchPage(controller: ctrl),
+      RxScheduler(controller: ctrl),
     );
     await tester.tap(find.text('Month'));
     await tester.pump();

@@ -167,7 +167,7 @@ class _Rows extends StatelessWidget {
             children: [
               Column(
                 children: [
-                  for (var i = 0; i < workers.length; i++)
+                  for (var i = 0; i < ctrl.technicians.length; i++)
                     _TechRow(
                       ctrl: ctrl,
                       index: i,
@@ -177,7 +177,9 @@ class _Rows extends StatelessWidget {
                     ),
                 ],
               ),
-              _NowLine(window: window),
+              // Both: main's live clock, and the derived window it is placed
+              // against.
+              _NowLine(window: window, nowHour: ctrl.nowHour),
             ],
           );
         },
@@ -187,8 +189,9 @@ class _Rows extends StatelessWidget {
 }
 
 class _NowLine extends StatefulWidget {
-  const _NowLine({required this.window});
+  const _NowLine({required this.window, required this.nowHour});
   final DayWindow window;
+  final double nowHour;
   @override
   State<_NowLine> createState() => _NowLineState();
 }
@@ -211,9 +214,12 @@ class _NowLineState extends State<_NowLine>
     return Positioned.fill(
       child: LayoutBuilder(
         builder: (context, box) {
-          final x =
-              Wb.headWidth +
-              widget.window.pctOf(kNowHour) * (box.maxWidth - Wb.headWidth);
+          // ⚠️ Placed against the **derived** window, not the hardcoded day:
+          // `hourToPct` divides by the fixed 07:30–19:00 span, so on a board
+          // whose axis was derived the line lands somewhere else entirely.
+          final x = Wb.headWidth +
+              widget.window.pctOf(widget.nowHour) *
+                  (box.maxWidth - Wb.headWidth);
           return IgnorePointer(
             child: Stack(
               clipBehavior: Clip.none,
@@ -246,7 +252,7 @@ class _NowLineState extends State<_NowLine>
                       borderRadius: BorderRadius.circular(Wb.rXs),
                     ),
                     child: Text(
-                      formatHour(kNowHour),
+                      formatHour(widget.nowHour),
                       style: Wb.code(
                         size: 9,
                         color: Wb.onPrimary,
@@ -297,7 +303,7 @@ class _TechRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final w = workers[index];
+    final w = ctrl.technicians[index];
     final clock = ctrl.clockOf(index);
     final jobs = ctrl.jobsOf(index);
     final appointed = jobs.fold<double>(0, (a, j) => a + j.duration);
@@ -996,10 +1002,8 @@ class _Coverage extends StatelessWidget {
                           child: Align(
                             alignment: Alignment.bottomCenter,
                             child: Container(
-                              height: (n / workers.length * 32).clamp(
-                                n == 0 ? 0 : 4,
-                                58,
-                              ),
+                              height: (n / ctrl.technicians.length * 32)
+                                  .clamp(n == 0 ? 0 : 4, 58),
                               decoration: BoxDecoration(
                                 color: n < 4
                                     ? Wb.coverageRed

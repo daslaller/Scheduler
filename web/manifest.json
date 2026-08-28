@@ -1,11 +1,11 @@
 {
-    "name": "Northline Schedule",
-    "short_name": "Northline",
+    "name": "RepairX Scheduler",
+    "short_name": "Scheduler",
     "start_url": ".",
     "display": "standalone",
-    "background_color": "#F6F3EE",
-    "theme_color": "#1D1C1A",
-    "description": "Repair-shop bench scheduler for Northline Device Repair.",
+    "background_color": "#F9FAFB",
+    "theme_color": "#2563EB",
+    "description": "RepairX bench scheduler — clocked time, repairs, and coverage.",
     "orientation": "landscape-primary",
     "prefer_related_applications": false,
     "icons": [
