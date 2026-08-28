@@ -17,6 +17,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:rx_scheduler/models.dart';
 import 'package:rx_scheduler/scheduler.dart';
+import 'package:rx_scheduler/widgets/month_overlay.dart';
 
 /// Each with the reason it cannot be true of a punch log.
 const _fabricated = <String, String>{
@@ -31,6 +32,13 @@ const _fabricated = <String, String>{
   'Over 8h': 'a rota alarm — a full day of work is not a problem',
   'Repairs': 'an appointed-jobs track a punch log has none of',
   'Drag either end': 'a punch is corrected by stating a time, not nudging one',
+};
+
+/// The month overlay's own set — same rule, a surface later.
+const _fabricatedMonth = <String, String>{
+  'flagged for review': 'a review queue that does not exist',
+  'Closed': 'asserts the shop was shut; a punch log only says nobody punched',
+  'days signed off': 'a sign-off model that does not exist',
 };
 
 void main() {
@@ -93,6 +101,62 @@ void main() {
     expect(find.textContaining('45m break'), findsOneWidget);
     expect(find.text('Peak bench'), findsOneWidget);
     expect(find.text('On break'), findsOneWidget);
+  });
+
+  testWidgets('nor does the month overlay', (tester) async {
+    final ctrl = RxSchedulerController(
+      technicians: const [
+        Technician(
+          id: 'a',
+          name: 'Anna Berg',
+          role: 'Technician',
+          initial: 'AB',
+          cert: '',
+          tint: Color(0xFFDBEAFE),
+        ),
+      ],
+      seedOnTheClock: false,
+      // One settled day, and one nobody clocked out of.
+      history: (id, day) => day.day == 24
+          ? const ClockHours(inHour: 8, outHour: 16, breakAt: 12)
+          : day.day == 25
+          ? const ClockHours(inHour: 7, outHour: 30, breakAt: 0, open: true)
+          : null,
+    );
+    addTearDown(ctrl.dispose);
+
+    // The overlay is a board; at the harness's default 800x600 it overflows
+    // and the failure is the surface, not the claim.
+    tester.view.physicalSize = const Size(1400, 1000);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Builder(
+          builder: (context) => TextButton(
+            onPressed: () => showMonthOverlay(context, ctrl: ctrl),
+            child: const Text('open'),
+          ),
+        ),
+      ),
+    );
+    await tester.tap(find.text('open'));
+    await tester.pumpAndSettle();
+
+    for (final entry in _fabricatedMonth.entries) {
+      expect(
+        find.textContaining(entry.key),
+        findsNothing,
+        reason: '"${entry.key}" is ${entry.value}',
+      );
+    }
+    expect(find.textContaining('Nobody clocked in'), findsWidgets);
+
+    // ⚠️ **Overtime counts settled runs only.** The 23-hour open run above is
+    // a cap the clock reached, so reporting 15h of overtime off it measures a
+    // punch nobody made. The settled 8-hour day contributes none either.
+    expect(find.text('0.0h'), findsOneWidget);
   });
 
   test('a break is a band of the run, and it stays inside it', () {

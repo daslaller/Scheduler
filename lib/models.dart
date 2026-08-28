@@ -190,10 +190,26 @@ class DayMeta {
     required this.hours,
     required this.ot,
     required this.status,
+    this.openN = 0,
+    this.openTech = const [],
   });
   final int day, crewN;
   final List<double> perTech;
   final double hours, ot;
+
+  /// How many of the day's runs were **forgotten** — open, and open long
+  /// enough that nobody is standing in one. Their hours are a cap the clock
+  /// reached, not a punch, so nothing derived from them is measured.
+  ///
+  /// ⚠️ **Forgotten, not merely open.** Somebody on shift right now has no
+  /// clock-out either and is not a problem; counting them here is what makes
+  /// an alarm stop being read by lunchtime. Same line the day board draws
+  /// between a shine and a dotted edge.
+  final int openN;
+
+  /// Which of them, positionally alongside [perTech] — so a bar can say that
+  /// *this* person's hours are unconfirmed rather than the day's.
+  final List<bool> openTech;
   final ApprovalStatus status;
 }
 
@@ -560,10 +576,22 @@ DayMeta dayMetaFrom(
   ];
   final crewN = perTech.where((v) => v > 0).length;
   final hours = (perTech.fold<double>(0, (a, b) => a + b) * 10).round() / 10;
+  // ⚠️ **Overtime is counted over SETTLED runs only.** An open run's hours are
+  // a cap the clock had reached, so a forgotten Monday clock-out read as 30.8
+  // hours and put 22.8 of them in the month's overtime figure — which is a
+  // measurement of a punch nobody made.
+  final settled = <double>[
+    for (final t in technicians)
+      if (history(t.id, when) case final c? when !c.open) c.paid,
+  ];
   final ot =
-      (perTech.where((v) => v > 8).fold<double>(0, (a, v) => a + (v - 8)) * 10)
+      (settled.where((v) => v > 8).fold<double>(0, (a, v) => a + (v - 8)) * 10)
               .round() /
           10;
+  final openTech = <bool>[
+    for (final t in technicians) history(t.id, when)?.forgotten ?? false,
+  ];
+  final openN = openTech.where((v) => v).length;
   return DayMeta(
     day: when.day,
     crewN: crewN,
@@ -573,6 +601,8 @@ DayMeta dayMetaFrom(
     // sign-off model here, and a day drawn "approved" because it had hours in
     // it would be the board asserting somebody signed something.
     ot: ot,
+    openN: openN,
+    openTech: openTech,
     status: crewN == 0 ? ApprovalStatus.closed : ApprovalStatus.draft,
   );
 }
