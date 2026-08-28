@@ -54,16 +54,14 @@ class MonthOverlay extends StatelessWidget {
     final all = metas.values.toList();
     final monthHours = all.fold<double>(0, (a, m) => a + m.hours);
     final monthOt = all.fold<double>(0, (a, m) => a + m.ot);
-    final worked = all.where((m) => m.crewN > 0).toList();
-    final openDays = worked.length;
-    // Days carrying a shift nobody closed. ⚠️ **Forgotten, not open** —
-    // somebody on shift right now has no clock-out either, and counting them
-    // here puts today's live shift in the alarm tile.
+    final openDays = all.where((m) => m.crewN > 0).length;
+    // Days carrying a shift nobody closed — the package can see one because
+    // `ClockHours.open` rides through `dayMetaFrom`.
     final openShiftDays = ctrl.hasHistory
         ? List.generate(dim, (i) => i + 1)
             .where((d) => ctrl.technicians.any((t) =>
                 (ctrl.historyFor(t.id, DateTime(kYear, ctrl.month + 1, d))
-                        ?.forgotten ??
+                        ?.open ??
                     false)))
             .length
         : 0;
@@ -199,18 +197,11 @@ class MonthOverlay extends StatelessWidget {
                                   ? 'across $openDays open days'
                                   : 'across $openDays days you worked',
                             ),
-                            // ⚠️ **"Flagged for review" is a queue**, and a
-                            // punch log has none — nothing flags and nobody
-                            // reviews. Over a history the figure stays (it is
-                            // measured, now that open runs are out of it) and
-                            // says what it is.
                             _MonthStat(
                               label: 'Overtime',
                               value: '${monthOt.toStringAsFixed(1)}h',
-                              sub: ctrl.hasHistory
-                                  ? 'past 8h, on settled shifts'
-                                  : 'flagged for review',
-                              valueColor: monthOt > 0 ? Wb.accent : null,
+                              sub: 'flagged for review',
+                              valueColor: Wb.accent,
                             ),
                             // ⚠️ **No sign-off figure over a real history.**
                             // `dayMetaFrom` invents no approval state, so
@@ -239,25 +230,11 @@ class MonthOverlay extends StatelessWidget {
                             if (onlyWorker == null)
                               _MonthStat(
                                 label: 'Avg. bench',
-                                // ⚠️ It was `hours / days / 8` — a count of
-                                // notional 8-hour bodies, which reported
-                                // **6.5 technicians** for a shop of five: one
-                                // 30-hour unconfirmed run is four people by
-                                // that arithmetic. Over a real log it is the
-                                // mean of the crew actually counted.
-                                value: ctrl.hasHistory
-                                    ? (worked.isEmpty
-                                              ? 0.0
-                                              : worked.fold<int>(
-                                                      0,
-                                                      (a, m) => a + m.crewN,
-                                                    ) /
-                                                    worked.length)
-                                          .toStringAsFixed(1)
-                                    : (monthHours /
-                                              (openDays == 0 ? 1 : openDays) /
-                                              8)
-                                          .toStringAsFixed(1),
+                                value:
+                                    (monthHours /
+                                            (openDays == 0 ? 1 : openDays) /
+                                            8)
+                                        .toStringAsFixed(1),
                                 sub: 'technicians per day',
                               )
                             else
@@ -299,19 +276,10 @@ class MonthOverlay extends StatelessWidget {
                                   LegendDot(color: Wb.gold, label: 'Draft'),
                                   SizedBox(width: 13),
                                 ],
-                                // Over a history a red day is one nobody
-                                // clocked out of — the same thing red means on
-                                // the day board. One colour, one meaning.
-                                if (ctrl.hasHistory)
-                                  const LegendDot(
-                                    color: Wb.accent,
-                                    label: 'No clock-out',
-                                  )
-                                else
-                                  const LegendDot(
-                                    color: Wb.accent,
-                                    label: 'Overtime',
-                                  ),
+                                const LegendDot(
+                                  color: Wb.accent,
+                                  label: 'Overtime',
+                                ),
                               ],
                             ),
                             const SizedBox(height: 11),
@@ -391,21 +359,9 @@ class _MonthStat extends StatelessWidget {
               children: [
                 Text(value, style: Wb.display(32, color: valueColor)),
                 const SizedBox(width: 6),
-                // ⚠️ **Flexible, and it always should have been.** The sub was
-                // laid out at its intrinsic width beside a 32px figure, so a
-                // tile could only ever hold the four captions it shipped with
-                // — every longer one overflowed the card, which `dart analyze`
-                // cannot see.
-                Flexible(
-                  child: Padding(
-                    padding: const EdgeInsets.only(bottom: 4),
-                    child: Text(
-                      sub,
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
-                      style: Wb.ui(size: 11.5, color: Wb.muted2, height: 1.25),
-                    ),
-                  ),
+                Padding(
+                  padding: const EdgeInsets.only(bottom: 4),
+                  child: Text(sub, style: Wb.ui(size: 11.5, color: Wb.muted2)),
                 ),
               ],
             ),
@@ -436,12 +392,6 @@ class _WeekRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // ⚠️ The week number was `31 + row`, so every month of every year
-    // reported weeks 31–36. Derived from the row's own Thursday, clamped into
-    // the month for the partial first and last rows.
-    final wk = isoWeekOf(
-      DateTime(ctrl.date.year, ctrl.date.month, (row * 7 - offset + 4).clamp(1, dim)),
-    );
     var wkHours = 0.0;
     final cells = <Widget>[];
     for (var c = 0; c < 7; c++) {
@@ -494,7 +444,7 @@ class _WeekRow extends StatelessWidget {
                       style: Wb.code(size: 15),
                     ),
                     Text(
-                      'Week $wk',
+                      'Week ${31 + row}',
                       style: Wb.kicker(size: 9, tracking: 0.1),
                     ),
                     const SizedBox(height: 8),
@@ -554,10 +504,7 @@ class _DayCell extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final m = meta;
-    // Over a real log red is **a run nobody clocked out of**, not a long day
-    // — the same claim the day board's red makes.
-    final heavy = ctrl.hasHistory ? m.openN > 0 : m.ot > 1.5;
-    // (openN counts forgotten runs only — a live shift is not a problem.)
+    final heavy = m.ot > 1.5;
     final mode = ctrl.monthMode;
     final hoursLabel = mode == MonthMode.crew
         ? (m.crewN > 0 ? '${m.crewN} tech' : '')
@@ -565,10 +512,7 @@ class _DayCell extends StatelessWidget {
     final foot = mode == MonthMode.status
         ? statusLabel(m.status)
         : m.crewN == 0
-        // ⚠️ **"Closed" asserts the shop was shut**, which a punch log never
-        // says — and it was drawn with the same green dot as a worked day, so
-        // a month nobody had recorded read as a healthy one.
-        ? (ctrl.hasHistory ? 'Nobody clocked in' : 'Closed')
+        ? 'Closed'
         : onlyWorker != null
         // "1 on" about yourself is a fact you already know; what the
         // day is worth to you is the hours.
@@ -576,8 +520,6 @@ class _DayCell extends StatelessWidget {
         : '${m.crewN} on';
     final tone = mode == MonthMode.status
         ? (m.crewN > 0 ? statusColor(m.status) : Wb.line)
-        : m.crewN == 0 && ctrl.hasHistory
-        ? Wb.line
         : (heavy ? Wb.accent : Wb.forest);
 
     return HoverTap(
@@ -687,17 +629,7 @@ class _DayCell extends StatelessWidget {
                                     ? (m.perTech[x] / 10 * 18).clamp(2.0, 20.0)
                                     : (m.perTech[x] / 10 * 12).clamp(2.0, 14.0),
                                 decoration: BoxDecoration(
-                                  // ⚠️ Over a real log red is **this
-                                  // person's** missing clock-out, not the
-                                  // day's and not a long shift: an ordinary
-                                  // 8.4-hour Monday reddened three bars out
-                                  // of four, which spends the colour that
-                                  // marks the one that is actually wrong.
-                                  color:
-                                      (ctrl.hasHistory
-                                          ? (x < m.openTech.length &&
-                                                m.openTech[x])
-                                          : m.perTech[x] > 8)
+                                  color: m.perTech[x] > 8
                                       ? Wb.accent
                                       : m.perTech[x] > 0
                                           ? ctrl.technicians[x].tint.withValues(

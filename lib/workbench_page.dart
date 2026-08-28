@@ -169,10 +169,7 @@ class _Header extends StatelessWidget {
                 WbCircleBtn(glyph: '→', onTap: ctrl.nextDay),
                 const SizedBox(width: 10),
                 Text(
-                  // ⚠️ `Week 35` was a literal, so every day of every year
-                  // reported the same week.
-                  'Week ${isoWeekOf(ctrl.date)} · ${ctrl.clockedCount} '
-                  'technicians clocked in',
+                  'Week 35 · ${ctrl.clockedCount} technicians clocked in',
                   style: Wb.ui(size: 11.5, color: Wb.muted2),
                 ),
               ],
@@ -183,17 +180,11 @@ class _Header extends StatelessWidget {
             child: Wrap(
               spacing: 9,
               children: [
-                // ⚠️ **Rota actions, dropped over a real history.** "Copy last
-                // week" writes next week's plan and "Approve N sheets" signs
-                // one off; a host drawing a punch log has neither a plan to
-                // copy nor a sign-off model. A button that looks live and
-                // does nothing is worse than its absence.
-                if (!ctrl.hasHistory)
-                  WbPill(
-                    label: 'Copy last week',
-                    leading: const Icon(Icons.copy_all_outlined, size: 14),
-                    onTap: ctrl.copyWeek,
-                  ),
+                WbPill(
+                  label: 'Copy last week',
+                  leading: const Icon(Icons.copy_all_outlined, size: 14),
+                  onTap: ctrl.copyWeek,
+                ),
                 WbPill(
                   label: 'Month overlay',
                   peach: true,
@@ -207,15 +198,12 @@ class _Header extends StatelessWidget {
                   leading: const Icon(Icons.person_outline, size: 15),
                   onTap: () => ctrl.showSelf(true),
                 ),
-                if (!ctrl.hasHistory)
-                  WbPill(
-                    label: ctrl.approved
-                        ? '4 sheets approved'
-                        : 'Approve 4 sheets',
-                    filled: true,
-                    leading: const Text('✓'),
-                    onTap: ctrl.approve,
-                  ),
+                WbPill(
+                  label: ctrl.approved ? '4 sheets approved' : 'Approve 4 sheets',
+                  filled: true,
+                  leading: const Text('✓'),
+                  onTap: ctrl.approve,
+                ),
               ],
             ),
           ),

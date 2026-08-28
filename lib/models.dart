@@ -120,13 +120,10 @@ class ClockHours {
 
   final double inHour, outHour, breakAt;
 
-  /// How long the break actually was.
-  ///
-  /// ⚠️ **It used to be hardcoded** — every bar's subline read `· 30m break`
-  /// whatever the punches said, so a 45-minute lunch printed as half an hour
-  /// on the one screen that exists to report hours. A default is kept because
-  /// the seeded rota has no real figure to give, but a host supplying a
-  /// history supplies this too.
+  /// How long the break was. The hatch's width is this, so it cannot stay the
+  /// half-hour the subline used to assume: a host with real punches has
+  /// 45-minute lunches, and a mark that says otherwise is worse than no mark.
+  /// The default keeps the seeded rota reading exactly as it did.
   final double breakHours;
 
   /// The run began before this day's midnight — a shift somebody started
@@ -146,13 +143,13 @@ class ClockHours {
   bool get overtime => paid > 8;
   bool get hasBreak => breakAt > 0;
 
-  /// The break as a fraction of the drawn run, for a mark painted over it.
-  /// Clamped into the bar: a break recorded outside the run it belongs to is
-  /// a punch to fix, not a reason to paint outside the shift.
+  /// The break as a fraction of the run, for a mark painted over it. Clamped
+  /// inside the bar: a break recorded outside the run it belongs to is a punch
+  /// to fix, not a licence to paint outside the shift.
   (double, double) get breakBand {
     final span = outHour - inHour;
     if (span <= 0 || !hasBreak) return (0, 0);
-    final at = ((breakAt - inHour) / span).clamp(0.0, 1.0);
+    final at = ((breakAt - 0.25 - inHour) / span).clamp(0.0, 1.0);
     return (at, (breakHours / span).clamp(0.0, 1.0 - at));
   }
 
@@ -190,26 +187,10 @@ class DayMeta {
     required this.hours,
     required this.ot,
     required this.status,
-    this.openN = 0,
-    this.openTech = const [],
   });
   final int day, crewN;
   final List<double> perTech;
   final double hours, ot;
-
-  /// How many of the day's runs were **forgotten** — open, and open long
-  /// enough that nobody is standing in one. Their hours are a cap the clock
-  /// reached, not a punch, so nothing derived from them is measured.
-  ///
-  /// ⚠️ **Forgotten, not merely open.** Somebody on shift right now has no
-  /// clock-out either and is not a problem; counting them here is what makes
-  /// an alarm stop being read by lunchtime. Same line the day board draws
-  /// between a shine and a dotted edge.
-  final int openN;
-
-  /// Which of them, positionally alongside [perTech] — so a bar can say that
-  /// *this* person's hours are unconfirmed rather than the day's.
-  final List<bool> openTech;
   final ApprovalStatus status;
 }
 
@@ -470,33 +451,6 @@ const jobSeeds = <List<JobSeed>>[
   ],
 ];
 
-/// ISO-8601 week number. Thursday decides the year, which is the whole rule:
-/// a week is in the year holding most of its days.
-int isoWeekOf(DateTime d) {
-  final day = DateTime(d.year, d.month, d.day);
-  final thursday = day.add(Duration(days: 4 - (day.weekday == 7 ? 7 : day.weekday)));
-  final jan1 = DateTime(thursday.year, 1, 1);
-  return 1 + (thursday.difference(jan1).inDays / 7).floor();
-}
-
-/// 24-hour clock label (`08:45`, `17:10`).
-///
-/// What a host drawing a real punch log wants: `8.4h` and `5:10p` are a
-/// rounding and a reading of somebody's pay, and a shop reconciling a
-/// timesheet reads the punch back as it was made.
-String formatClock(double h) {
-  final hh = h.floor();
-  final mm = ((h - hh) * 60).round();
-  return '${hh.toString().padLeft(2, '0')}:${mm.toString().padLeft(2, '0')}';
-}
-
-/// A span of hours as `HH:MM` — `7.666` is `07:40`, not `7.7h`.
-String formatSpan(double hours) {
-  final h = hours.abs().floor();
-  final m = ((hours.abs() - h) * 60).round();
-  return '${h.toString().padLeft(2, '0')}:${m.toString().padLeft(2, '0')}';
-}
-
 /// 12-hour clock label matching the mockup (`1:45p`, `8a`).
 String formatHour(double h, {bool amPm = false}) {
   final hh = h.floor();
@@ -576,22 +530,10 @@ DayMeta dayMetaFrom(
   ];
   final crewN = perTech.where((v) => v > 0).length;
   final hours = (perTech.fold<double>(0, (a, b) => a + b) * 10).round() / 10;
-  // ⚠️ **Overtime is counted over SETTLED runs only.** An open run's hours are
-  // a cap the clock had reached, so a forgotten Monday clock-out read as 30.8
-  // hours and put 22.8 of them in the month's overtime figure — which is a
-  // measurement of a punch nobody made.
-  final settled = <double>[
-    for (final t in technicians)
-      if (history(t.id, when) case final c? when !c.open) c.paid,
-  ];
   final ot =
-      (settled.where((v) => v > 8).fold<double>(0, (a, v) => a + (v - 8)) * 10)
+      (perTech.where((v) => v > 8).fold<double>(0, (a, v) => a + (v - 8)) * 10)
               .round() /
           10;
-  final openTech = <bool>[
-    for (final t in technicians) history(t.id, when)?.forgotten ?? false,
-  ];
-  final openN = openTech.where((v) => v).length;
   return DayMeta(
     day: when.day,
     crewN: crewN,
@@ -601,8 +543,6 @@ DayMeta dayMetaFrom(
     // sign-off model here, and a day drawn "approved" because it had hours in
     // it would be the board asserting somebody signed something.
     ot: ot,
-    openN: openN,
-    openTech: openTech,
     status: crewN == 0 ? ApprovalStatus.closed : ApprovalStatus.draft,
   );
 }
