@@ -42,6 +42,17 @@ void main() {
       expect(monday.status, ApprovalStatus.draft);
     });
 
+    test('no sign-off figure is invented over a real history', () {
+      // ⚠️ The Approval *legend* dropping out was not enough: the stat tile
+      // still read "18/27 days signed off", which is the board asserting
+      // somebody signed something. Caught by photographing the month, not by
+      // reading it.
+      final c = RxSchedulerController(history: worked);
+      expect(c.historyFor('ak', DateTime(kYear, 8, 24)), isNotNull);
+      expect(c.historyFor('ak', DateTime(kYear, 8, 25)), isNull);
+      expect(c.metaFor(DateTime(kYear, 8, 24)).status, ApprovalStatus.draft);
+    });
+
     test('without a history the board is the planner it always was', () {
       final c = RxSchedulerController();
       expect(c.hasHistory, isFalse);

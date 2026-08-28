@@ -55,6 +55,16 @@ class MonthOverlay extends StatelessWidget {
     final monthHours = all.fold<double>(0, (a, m) => a + m.hours);
     final monthOt = all.fold<double>(0, (a, m) => a + m.ot);
     final openDays = all.where((m) => m.crewN > 0).length;
+    // Days carrying a shift nobody closed — the package can see one because
+    // `ClockHours.open` rides through `dayMetaFrom`.
+    final openShiftDays = ctrl.hasHistory
+        ? List.generate(dim, (i) => i + 1)
+            .where((d) => ctrl.technicians.any((t) =>
+                (ctrl.historyFor(t.id, DateTime(kYear, ctrl.month + 1, d))
+                        ?.open ??
+                    false)))
+            .length
+        : 0;
     final approvedDays = all
         .where((m) => m.status == ApprovalStatus.approved)
         .length;
@@ -186,11 +196,26 @@ class MonthOverlay extends StatelessWidget {
                               sub: 'flagged for review',
                               valueColor: Wb.accent,
                             ),
-                            _MonthStat(
-                              label: 'Approved',
-                              value: '$approvedDays/$openDays',
-                              sub: 'days signed off',
-                            ),
+                            // ⚠️ **No sign-off figure over a real history.**
+                            // `dayMetaFrom` invents no approval state, so
+                            // `18/27 days signed off` would be the board
+                            // asserting somebody signed something. The slot
+                            // carries the figure a punch log does have: how
+                            // much of the month is still an estimate.
+                            if (ctrl.hasHistory)
+                              _MonthStat(
+                                label: 'Unconfirmed',
+                                value: '${all.where((m) => m.crewN > 0 && m.hours == 0).length + openShiftDays}',
+                                sub: 'days with a missing clock-out',
+                                valueColor:
+                                    openShiftDays > 0 ? Wb.accent : null,
+                              )
+                            else
+                              _MonthStat(
+                                label: 'Approved',
+                                value: '$approvedDays/$openDays',
+                                sub: 'days signed off',
+                              ),
                             // ⚠️ "Avg. bench 1.0 technicians per day" is a
                             // true sentence and a useless one when the month
                             // is one person's. The slot carries the figure

@@ -76,6 +76,12 @@ class RxSchedulerController extends ChangeNotifier implements RxToastSource {
     notifyListeners();
   }
 
+  /// The host's history for one technician on one day, or null. Surfaces that
+  /// need the raw [ClockHours] — not the day's [DayMeta] — read it here rather
+  /// than holding their own reference to the callback.
+  ClockHours? historyFor(String technicianId, DateTime day) =>
+      _history?.call(technicianId, day);
+
   /// The day's figures, from the history when there is one.
   DayMeta metaFor(DateTime when) {
     final h = _history;
