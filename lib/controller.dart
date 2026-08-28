@@ -20,7 +20,13 @@ class RxSchedulerController extends ChangeNotifier implements RxToastSource {
     DateTime? initialDate,
     this.workshopName = 'Northline Device Repair — Workshop 02',
     bool seedOnTheClock = true,
-  })  : technicians = List.unmodifiable(technicians ?? kDemoTechnicians),
+    // `this._history` would satisfy the lint, but a private initialising
+    // formal puts an underscore in the public API's parameter list, and
+    // `history:` is what INTEGRATION.md documents.
+    RxScheduleHistory? history,
+    // ignore: prefer_initializing_formals
+  })  : _history = history,
+        technicians = List.unmodifiable(technicians ?? kDemoTechnicians),
         now = now ?? _demoNow {
     final seed = initialDate ?? this.now();
     day = seed.day;
@@ -52,6 +58,37 @@ class RxSchedulerController extends ChangeNotifier implements RxToastSource {
   String? flash;
   final Map<int, ClockOverride> _clocks = {};
   final Set<String> _onClock = {};
+
+  RxScheduleHistory? _history;
+
+  /// Whether this board is drawing a host's real hours or the demo's planned
+  /// ones. Surfaces that must not caption themselves as a timesheet read it.
+  bool get hasHistory => _history != null;
+
+  /// Supply — or replace — the host's worked history. See
+  /// [RxScheduleHistory]; pass null to go back to planned shifts.
+  ///
+  /// Call it whenever the host's own data changes: the board is a view of
+  /// whatever this returns, so a re-read of the punch log is one `setHistory`
+  /// away from being on screen.
+  void setHistory(RxScheduleHistory? history) {
+    _history = history;
+    notifyListeners();
+  }
+
+  /// The host's history for one technician on one day, or null. Surfaces that
+  /// need the raw [ClockHours] — not the day's [DayMeta] — read it here rather
+  /// than holding their own reference to the callback.
+  ClockHours? historyFor(String technicianId, DateTime day) =>
+      _history?.call(technicianId, day);
+
+  /// The day's figures, from the history when there is one.
+  DayMeta metaFor(DateTime when) {
+    final h = _history;
+    if (h != null) return dayMetaFrom(h, technicians, when);
+    return dayMeta(when.month - 1, when.day,
+        technicianCount: technicians.length);
+  }
 
   final _clockEvents = StreamController<ClockEvent>.broadcast(sync: true);
   final _toasts = StreamController<RxToastMessage>.broadcast(sync: true);
@@ -93,6 +130,14 @@ class RxSchedulerController extends ChangeNotifier implements RxToastSource {
   static const _openIn = {3: kNowHour - 20, 4: 10.0};
 
   ClockHours clockOf(int i) {
+    // ⚠️ **History wins over the planned window**, and a null from it means
+    // *did not work* rather than *fall back to the rota*. A planned shift
+    // drawn on a day nobody punched is a bar that looks like evidence.
+    final h = _history;
+    if (h != null && _clocks[i] == null) {
+      return h(technicians[i].id, date) ??
+          const ClockHours(inHour: 0, outHour: 0, breakAt: 0);
+    }
     final w = technicians[i];
     final o = _clocks[i];
     // A nudged clock is a clock somebody has stated, so it closes.

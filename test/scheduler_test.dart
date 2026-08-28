@@ -7,6 +7,68 @@ import 'package:rx_scheduler/rx_scheduler.dart';
 import 'package:rx_scheduler/toast.dart';
 
 void main() {
+  group('the history capability', () {
+    ClockHours? worked(String id, DateTime day) {
+      // Anna works Mondays only, 8–16.
+      if (id != 'ak' || day.weekday != DateTime.monday) return null;
+      return const ClockHours(inHour: 8, outHour: 16, breakAt: 12);
+    }
+
+    test('a host history replaces the planned window', () {
+      final c = RxSchedulerController(history: worked);
+      expect(c.hasHistory, isTrue);
+      // 24 August 2026 is a Monday.
+      expect(c.clockOf(0).inHour, 8);
+      expect(c.clockOf(0).outHour, 16);
+    });
+
+    test('null from the history means DID NOT WORK, never the rota', () {
+      // ⚠️ The rule the capability turns on. Falling back to the planned
+      // shift would draw a bar on a day nobody punched — a fiction that looks
+      // exactly like evidence.
+      final c = RxSchedulerController(history: worked);
+      expect(c.clockOf(1).paid, 0, reason: 'Priya has no history at all');
+      c.pickDay(25); // a Tuesday
+      expect(c.clockOf(0).paid, 0, reason: 'Anna does not work Tuesdays');
+    });
+
+    test('the month reads the same history, so the two cannot disagree', () {
+      final c = RxSchedulerController(history: worked);
+      final monday = c.metaFor(DateTime(kYear, 8, 24));
+      expect(monday.crewN, 1);
+      expect(monday.hours, 8);
+      expect(c.metaFor(DateTime(kYear, 8, 25)).crewN, 0);
+      // And no sign-off state is invented over real hours.
+      expect(monday.status, ApprovalStatus.draft);
+    });
+
+    test('no sign-off figure is invented over a real history', () {
+      // ⚠️ The Approval *legend* dropping out was not enough: the stat tile
+      // still read "18/27 days signed off", which is the board asserting
+      // somebody signed something. Caught by photographing the month, not by
+      // reading it.
+      final c = RxSchedulerController(history: worked);
+      expect(c.historyFor('ak', DateTime(kYear, 8, 24)), isNotNull);
+      expect(c.historyFor('ak', DateTime(kYear, 8, 25)), isNull);
+      expect(c.metaFor(DateTime(kYear, 8, 24)).status, ApprovalStatus.draft);
+    });
+
+    test('without a history the board is the planner it always was', () {
+      final c = RxSchedulerController();
+      expect(c.hasHistory, isFalse);
+      expect(c.clockOf(0).paid, greaterThan(0));
+    });
+
+    test('setHistory swaps the source on a live controller', () {
+      final c = RxSchedulerController();
+      final planned = c.clockOf(0).paid;
+      c.setHistory(worked);
+      expect(c.clockOf(0).paid, isNot(planned));
+      c.setHistory(null);
+      expect(c.clockOf(0).paid, planned);
+    });
+  });
+
   test('formatHour matches mockup labels', () {
     expect(formatHour(8), '8a');
     expect(formatHour(13.75), '1:45p');

@@ -476,6 +476,60 @@ List<RepairJob> repairJobsFor(int workerIndex, int day, double clockIn) {
   return out;
 }
 
+/// **What a technician actually worked on a given day**, supplied by the host.
+///
+/// This is the capability that turns the bench from a planner into a board
+/// that can draw a shop's real history. Without it the calendar renders each
+/// technician's *planned* window plus punches made while it is mounted —
+/// which is a rota, not a timesheet, and captioning one as the other is the
+/// wrong-but-plausible claim this package refuses to make on a host's behalf.
+///
+/// Return `null` for "that person did not work that day"; the board then draws
+/// their lane empty rather than falling back to a planned shift, because an
+/// empty lane is a fact and a planned one nobody worked is a fiction.
+///
+/// ⚠️ It must be **cheap and synchronous** — the board calls it per technician
+/// per painted day, and the month grid calls it across a whole month. Hosts
+/// should answer from something already in memory (RepairX hands it a map
+/// built from one `time_entries` read), never from a network call.
+typedef RxScheduleHistory = ClockHours? Function(
+  String technicianId,
+  DateTime day,
+);
+
+/// [dayMeta] over a real history rather than the demo's generator.
+///
+/// The same shape, so every surface that reads a [DayMeta] — the month cells,
+/// the week column, the totals — works unchanged whichever source is behind
+/// it. That is the whole point of adding the capability here rather than a
+/// second month grid in the host.
+DayMeta dayMetaFrom(
+  RxScheduleHistory history,
+  List<Technician> technicians,
+  DateTime when,
+) {
+  final perTech = <double>[
+    for (final t in technicians) history(t.id, when)?.paid ?? 0,
+  ];
+  final crewN = perTech.where((v) => v > 0).length;
+  final hours = (perTech.fold<double>(0, (a, b) => a + b) * 10).round() / 10;
+  final ot =
+      (perTech.where((v) => v > 8).fold<double>(0, (a, v) => a + (v - 8)) * 10)
+              .round() /
+          10;
+  return DayMeta(
+    day: when.day,
+    crewN: crewN,
+    perTech: perTech,
+    hours: hours,
+    // ⚠️ **No approval state is invented.** A host with real hours has no
+    // sign-off model here, and a day drawn "approved" because it had hours in
+    // it would be the board asserting somebody signed something.
+    ot: ot,
+    status: crewN == 0 ? ApprovalStatus.closed : ApprovalStatus.draft,
+  );
+}
+
 DayMeta dayMeta(int month, int day, {int technicianCount = 7}) {
   final dow = DateTime(kYear, month + 1, day).weekday % 7; // 0 = Sunday
   final weekday = dow != 0 && dow != 6;

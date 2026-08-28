@@ -45,8 +45,9 @@ class MonthOverlay extends StatelessWidget {
     final metas = {
       for (var d = 1; d <= dim; d++)
         d: () {
-          final m =
-              dayMeta(ctrl.month, d, technicianCount: ctrl.technicians.length);
+          // Through the controller, so a host that supplied a history gets
+          // its own hours here and not the demo's generator.
+          final m = ctrl.metaFor(DateTime(kYear, ctrl.month + 1, d));
           return onlyWorker == null ? m : onlyTech(m, onlyWorker!);
         }(),
     };
@@ -54,6 +55,16 @@ class MonthOverlay extends StatelessWidget {
     final monthHours = all.fold<double>(0, (a, m) => a + m.hours);
     final monthOt = all.fold<double>(0, (a, m) => a + m.ot);
     final openDays = all.where((m) => m.crewN > 0).length;
+    // Days carrying a shift nobody closed — the package can see one because
+    // `ClockHours.open` rides through `dayMetaFrom`.
+    final openShiftDays = ctrl.hasHistory
+        ? List.generate(dim, (i) => i + 1)
+            .where((d) => ctrl.technicians.any((t) =>
+                (ctrl.historyFor(t.id, DateTime(kYear, ctrl.month + 1, d))
+                        ?.open ??
+                    false)))
+            .length
+        : 0;
     final approvedDays = all
         .where((m) => m.status == ApprovalStatus.approved)
         .length;
@@ -150,9 +161,16 @@ class MonthOverlay extends StatelessWidget {
                               child: Row(
                                 mainAxisSize: MainAxisSize.min,
                                 children: [
+                                  // ⚠️ The **Approval lens** goes too. Its
+                                  // cells read a status this package does not
+                                  // derive from a host's hours, so over a real
+                                  // history it is a tab that reports nothing.
                                   SegmentedTabs(
-                                    labels: const ['Hours', 'Crew', 'Approval'],
-                                    index: mode.index,
+                                    labels: ctrl.hasHistory
+                                        ? const ['Hours', 'Crew']
+                                        : const ['Hours', 'Crew', 'Approval'],
+                                    index: mode.index.clamp(
+                                        0, ctrl.hasHistory ? 1 : 2),
                                     onChanged: (i) =>
                                         ctrl.setMonthMode(MonthMode.values[i]),
                                   ),
@@ -185,11 +203,26 @@ class MonthOverlay extends StatelessWidget {
                               sub: 'flagged for review',
                               valueColor: Wb.accent,
                             ),
-                            _MonthStat(
-                              label: 'Approved',
-                              value: '$approvedDays/$openDays',
-                              sub: 'days signed off',
-                            ),
+                            // ⚠️ **No sign-off figure over a real history.**
+                            // `dayMetaFrom` invents no approval state, so
+                            // `18/27 days signed off` would be the board
+                            // asserting somebody signed something. The slot
+                            // carries the figure a punch log does have: how
+                            // much of the month is still an estimate.
+                            if (ctrl.hasHistory)
+                              _MonthStat(
+                                label: 'Unconfirmed',
+                                value: '${all.where((m) => m.crewN > 0 && m.hours == 0).length + openShiftDays}',
+                                sub: 'days with a missing clock-out',
+                                valueColor:
+                                    openShiftDays > 0 ? Wb.accent : null,
+                              )
+                            else
+                              _MonthStat(
+                                label: 'Approved',
+                                value: '$approvedDays/$openDays',
+                                sub: 'days signed off',
+                              ),
                             // ⚠️ "Avg. bench 1.0 technicians per day" is a
                             // true sentence and a useless one when the month
                             // is one person's. The slot carries the figure
@@ -225,18 +258,24 @@ class MonthOverlay extends StatelessWidget {
                                     style: Wb.ui(size: 11.5, color: Wb.muted2),
                                   ),
                                 ),
-                                const LegendDot(
-                                  color: Wb.forest,
-                                  label: 'Approved',
-                                ),
-                                const SizedBox(width: 13),
-                                const LegendDot(
-                                  color: Wb.purple,
-                                  label: 'Submitted',
-                                ),
-                                const SizedBox(width: 13),
-                                const LegendDot(color: Wb.gold, label: 'Draft'),
-                                const SizedBox(width: 13),
+                                // ⚠️ **No approval key over a real history.**
+                                // `dayMetaFrom` invents no sign-off state, so
+                                // these would name three colours that never
+                                // appear on the grid.
+                                if (!ctrl.hasHistory) ...const [
+                                  LegendDot(
+                                    color: Wb.forest,
+                                    label: 'Approved',
+                                  ),
+                                  SizedBox(width: 13),
+                                  LegendDot(
+                                    color: Wb.purple,
+                                    label: 'Submitted',
+                                  ),
+                                  SizedBox(width: 13),
+                                  LegendDot(color: Wb.gold, label: 'Draft'),
+                                  SizedBox(width: 13),
+                                ],
                                 const LegendDot(
                                   color: Wb.accent,
                                   label: 'Overtime',
