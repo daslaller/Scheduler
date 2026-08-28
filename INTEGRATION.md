@@ -173,6 +173,41 @@ contains `now()` as already punched in.
 
 Pass `silent: true` when RepairX will show its own UI for the result.
 
+## 6b. Draw the shop's real hours (`history`)
+
+By default the board draws each technician's **planned** window plus punches
+made while it is mounted. That is a rota, not a timesheet. Hand it a history
+and it draws what people actually worked:
+
+```dart
+final scheduler = RxSchedulerController(
+  technicians: repairxTechnicians,
+  seedOnTheClock: false,
+  history: (technicianId, day) => myPunchLog[technicianId]?[day],
+);
+
+// or later, whenever your data changes:
+scheduler.setHistory(next);
+```
+
+`RxScheduleHistory` is
+`ClockHours? Function(String technicianId, DateTime day)`.
+
+Three rules it is worth knowing:
+
+- **`null` means *did not work*, never *fall back to the rota*.** A planned
+  shift drawn on a day nobody punched is a bar that looks like evidence.
+- **The month reads the same source**, via `controller.metaFor(day)`, so the
+  day board and the month overlay cannot disagree about a person's hours.
+- **No approval state is invented over a real history** — `hasHistory` is
+  true, the Approval legend drops out, and every day is `draft`. This package
+  has no sign-off model, and colouring a day "approved" because it had hours
+  in it would be asserting somebody signed something.
+
+It must be **cheap and synchronous**: the board calls it per technician per
+painted day, and the month calls it across a whole month. Answer from
+something already in memory, never from a network call.
+
 ## 7. Listen for punches (sync timesheets / backend)
 
 ```dart

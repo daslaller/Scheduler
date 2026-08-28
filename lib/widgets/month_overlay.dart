@@ -45,8 +45,9 @@ class MonthOverlay extends StatelessWidget {
     final metas = {
       for (var d = 1; d <= dim; d++)
         d: () {
-          final m =
-              dayMeta(ctrl.month, d, technicianCount: ctrl.technicians.length);
+          // Through the controller, so a host that supplied a history gets
+          // its own hours here and not the demo's generator.
+          final m = ctrl.metaFor(DateTime(kYear, ctrl.month + 1, d));
           return onlyWorker == null ? m : onlyTech(m, onlyWorker!);
         }(),
     };
