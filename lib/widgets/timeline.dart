@@ -634,7 +634,12 @@ class _ShiftBarState extends State<_ShiftBar> {
                   color: over ? Wb.accentHandle : Wb.shiftHandle,
                   onDrag: (dx, w) => _apply(false, dx, w),
                 ),
-              if (clock.hasBreak) _BreakMarks(clock: clock, tone: fg),
+              if (clock.hasBreak) _BreakMarks(
+                  clock: clock,
+                  // The hash follows the bar it is drawn on — the scheduler's
+                  // own rule, and the reason it is a parameter at all.
+                  tone: over ? Wb.accentHandle : Wb.breakHash,
+                ),
             ],
           ),
         ),
@@ -705,11 +710,9 @@ class _BreakMarks extends StatelessWidget {
   const _BreakMarks({required this.clock, required this.tone});
   final ClockHours clock;
 
-  /// ⚠️ **The bar's own foreground, not the rail colour.** The rules are read
-  /// against the bar's fill, so they take the colour everything else on that
-  /// fill is drawn in — which is what makes a hatch on a red bar read as red.
-  /// Ported from the handle colour instead, they came out a third weaker
-  /// (peak ink 105 against 161) and the mark went washy.
+  /// The hash colour — `Wb.breakHash`, solid. ⚠️ Not the bar's foreground at
+  /// 40%: a thin dark rule at low alpha is a shade of the fill, and a field of
+  /// them is a shaded patch. A hash is its own light line drawn *on* the fill.
   final Color tone;
 
   @override
@@ -725,27 +728,48 @@ class _HashPainter extends CustomPainter {
   final ClockHours clock;
   final Color tone;
 
+  /// ⚠️ **The break is a SHEARED box, not a rectangle** — its left and right
+  /// edges run parallel to the rules themselves, so every stripe gets its own
+  /// start and end.
+  ///
+  /// Clipped to a plain `Rect` — which is what this was — every rule is
+  /// guillotined on the same vertical column, and a hard vertical edge across
+  /// a field of diagonals reads as *a box with texture in it* rather than as
+  /// hatching. That single edge is the whole difference between the mark the
+  /// owner approved and the one that shipped; the rules were identical.
+  ///
+  /// ⚠️ **Sheared about its middle, keeping the break's full width at every
+  /// height.** Anchoring the corners instead — the break's start at the
+  /// bottom-left, its end at the top-right — costs one bar-height of width,
+  /// and a 30-minute break on a 34px bar is only 42px wide to begin with: it
+  /// collapsed to a single rule. Centred, the mark is always exactly as wide
+  /// as the break, and only its ends are slanted.
   @override
   void paint(Canvas canvas, Size size) {
     final (at, width) = clock.breakBand;
     if (width <= 0) return;
-    final band = Rect.fromLTWH(
-      at * size.width,
-      0,
-      width * size.width,
-      size.height,
-    );
+    final h = size.height;
+    final x0 = at * size.width;
+    final x1 = x0 + width * size.width;
+    final lean = h / 2;
+
     canvas.save();
-    canvas.clipRect(band);
+    canvas.clipPath(
+      Path()
+        ..moveTo(x0 - lean, h)
+        ..lineTo(x0 + lean, 0)
+        ..lineTo(x1 + lean, 0)
+        ..lineTo(x1 - lean, h)
+        ..close(),
+    );
+    // The approved painter's own numbers: a solid light rule, not a thin dark
+    // one at 40% — translucent and a pixel closer together they fuse into a
+    // shaded slab instead of reading as separate strokes.
     final p = Paint()
-      ..color = tone.withValues(alpha: 0.4)
-      ..strokeWidth = 1;
-    for (var x = band.left - band.height; x < band.right; x += 6) {
-      canvas.drawLine(
-        Offset(x, band.bottom),
-        Offset(x + band.height, band.top),
-        p,
-      );
+      ..color = tone
+      ..strokeWidth = 1.4;
+    for (var x = x0 - h - lean; x < x1 + lean; x += 7) {
+      canvas.drawLine(Offset(x, h), Offset(x + h, 0), p);
     }
     canvas.restore();
   }
