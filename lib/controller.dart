@@ -300,6 +300,17 @@ class RxSchedulerController extends ChangeNotifier implements RxToastSource {
   }
 
   void nudge(int i, {required bool inSide, required double delta}) {
+    // ⚠️ **A nudge cannot touch a real punch log.** It writes a
+    // `ClockOverride`, which `clockOf` reads *instead of* the history — so
+    // dragging a shift somebody actually worked discarded their punches and
+    // redrew the row from this technician's planned window. Anna's real
+    // 08:45–17:10 became 09:00–17:00, on screen, presented as an edit that
+    // had worked. Nothing was written either way: `nudge` emits no
+    // `ClockEvent`, so no host ever hears about it and a reload reverts it.
+    //
+    // Correcting a punch is a stated time, deliberately, through the host's
+    // own write path. It is not a bar dragged half an hour.
+    if (_history != null) return;
     final c = clockOf(i);
     var nextIn = c.inHour;
     var nextOut = c.outHour;

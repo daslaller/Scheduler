@@ -304,6 +304,23 @@ class LegendDot extends StatelessWidget {
   }
 }
 
+/// The day's hours, stated. What a [StepperChip] becomes when the board is
+/// drawing a real punch log and there is nothing here to nudge.
+class ReadOnlyChip extends StatelessWidget {
+  const ReadOnlyChip({super.key, required this.label, this.danger = false});
+  final String label;
+  final bool danger;
+
+  @override
+  Widget build(BuildContext context) => Padding(
+    padding: const EdgeInsets.symmetric(horizontal: 5),
+    child: Text(
+      label,
+      style: Wb.code(size: 13, color: danger ? Wb.accent : Wb.ink),
+    ),
+  );
+}
+
 class StepperChip extends StatelessWidget {
   const StepperChip({
     super.key,

@@ -357,7 +357,15 @@ class _TechRow extends StatelessWidget {
                         ],
                       ),
                     ),
-                    if (isClock)
+                    // Read-only over a real log — see `nudge`. A stepper that
+                    // refuses is worse than none: it is the same dead control,
+                    // still inviting the tap.
+                    if (isClock && ctrl.hasHistory)
+                      ReadOnlyChip(
+                        label: '${clock.paid.toStringAsFixed(1)}h',
+                        danger: clock.forgotten,
+                      )
+                    else if (isClock)
                       StepperChip(
                         onMinus: () =>
                             ctrl.nudge(index, inSide: false, delta: -0.5),
@@ -472,6 +480,7 @@ class _ShiftTrack extends StatelessWidget {
           top: 9,
           bottom: 9,
           child: _ShiftBar(
+            readOnly: ctrl.hasHistory,
             clock: clock,
             overtime: over,
             onDragIn: (d) => ctrl.nudge(index, inSide: true, delta: d),
@@ -488,12 +497,17 @@ class _ShiftBar extends StatefulWidget {
   const _ShiftBar({
     required this.clock,
     required this.overtime,
+    required this.readOnly,
     required this.onDragIn,
     required this.onDragOut,
     required this.onTap,
   });
   final ClockHours clock;
   final bool overtime;
+
+  /// The host supplied a real punch log, so the bar **states** hours rather
+  /// than editing them — see `SchedulerController.nudge`.
+  final bool readOnly;
   final ValueChanged<double> onDragIn, onDragOut;
   final VoidCallback onTap;
 
@@ -620,10 +634,12 @@ class _ShiftBarState extends State<_ShiftBar> {
                   ],
                 ),
               ),
+              // The spine stays — it marks where the shift starts. What goes
+              // over a real log is its ability to drag; see `nudge`.
               _Handle(
                 left: true,
                 color: over ? Wb.accentHandle : Wb.shiftHandle,
-                onDrag: (dx, w) => _apply(true, dx, w),
+                onDrag: widget.readOnly ? null : (dx, w) => _apply(true, dx, w),
               ),
               // ⚠️ **No trailing handle on an open shift.** Dragging it would
               // invent the missing clock-out — a fact about somebody's pay
@@ -632,7 +648,8 @@ class _ShiftBarState extends State<_ShiftBar> {
                 _Handle(
                   left: false,
                   color: over ? Wb.accentHandle : Wb.shiftHandle,
-                  onDrag: (dx, w) => _apply(false, dx, w),
+                  onDrag:
+                      widget.readOnly ? null : (dx, w) => _apply(false, dx, w),
                 ),
               if (clock.hasBreak) _BreakMarks(
                   clock: clock,
@@ -656,7 +673,11 @@ class _Handle extends StatelessWidget {
   });
   final bool left;
   final Color color;
-  final void Function(double dx, double width) onDrag;
+
+  /// Null over a real punch log: the spine still marks where the shift starts,
+  /// but it is not a grip — there is nothing here a drag could legitimately
+  /// change. It stops taking the resize cursor and the pointer with it.
+  final void Function(double dx, double width)? onDrag;
 
   @override
   Widget build(BuildContext context) {
@@ -667,16 +688,22 @@ class _Handle extends StatelessWidget {
       bottom: 0,
       width: 14,
       child: MouseRegion(
-        cursor: SystemMouseCursors.resizeColumn,
+        cursor: onDrag == null
+            ? MouseCursor.defer
+            : SystemMouseCursors.resizeColumn,
         child: GestureDetector(
-          behavior: HitTestBehavior.opaque,
-          onHorizontalDragUpdate: (d) {
-            final box = context.findRenderObject() as RenderBox?;
-            final w = box?.parent is RenderBox
-                ? (box!.parent as RenderBox).size.width
-                : 120.0;
-            onDrag(d.delta.dx, w);
-          },
+          behavior: onDrag == null
+              ? HitTestBehavior.translucent
+              : HitTestBehavior.opaque,
+          onHorizontalDragUpdate: onDrag == null
+              ? null
+              : (d) {
+                  final box = context.findRenderObject() as RenderBox?;
+                  final w = box?.parent is RenderBox
+                      ? (box!.parent as RenderBox).size.width
+                      : 120.0;
+                  onDrag!(d.delta.dx, w);
+                },
           child: Align(
             alignment: left ? Alignment.centerLeft : Alignment.centerRight,
             child: Container(
