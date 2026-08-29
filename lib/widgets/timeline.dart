@@ -634,7 +634,7 @@ class _ShiftBarState extends State<_ShiftBar> {
                   color: over ? Wb.accentHandle : Wb.shiftHandle,
                   onDrag: (dx, w) => _apply(false, dx, w),
                 ),
-              if (clock.hasBreak) _BreakMarks(clock: clock, overtime: over),
+              if (clock.hasBreak) _BreakMarks(clock: clock, tone: fg),
             ],
           ),
         ),
@@ -702,22 +702,28 @@ class _Handle extends StatelessWidget {
 /// shifts*, and this is one. Rules at 45°, 6px apart — at 4px they moiré
 /// against the hour grid showing through behind them.
 class _BreakMarks extends StatelessWidget {
-  const _BreakMarks({required this.clock, required this.overtime});
+  const _BreakMarks({required this.clock, required this.tone});
   final ClockHours clock;
-  final bool overtime;
+
+  /// ⚠️ **The bar's own foreground, not the rail colour.** The rules are read
+  /// against the bar's fill, so they take the colour everything else on that
+  /// fill is drawn in — which is what makes a hatch on a red bar read as red.
+  /// Ported from the handle colour instead, they came out a third weaker
+  /// (peak ink 105 against 161) and the mark went washy.
+  final Color tone;
 
   @override
   Widget build(BuildContext context) => Positioned.fill(
     child: IgnorePointer(
-      child: CustomPaint(painter: _HashPainter(clock, overtime)),
+      child: CustomPaint(painter: _HashPainter(clock, tone)),
     ),
   );
 }
 
 class _HashPainter extends CustomPainter {
-  _HashPainter(this.clock, this.overtime);
+  _HashPainter(this.clock, this.tone);
   final ClockHours clock;
-  final bool overtime;
+  final Color tone;
 
   @override
   void paint(Canvas canvas, Size size) {
@@ -732,9 +738,7 @@ class _HashPainter extends CustomPainter {
     canvas.save();
     canvas.clipRect(band);
     final p = Paint()
-      ..color = (overtime ? Wb.accentHandle : Wb.shiftHandle).withValues(
-        alpha: 0.42,
-      )
+      ..color = tone.withValues(alpha: 0.4)
       ..strokeWidth = 1;
     for (var x = band.left - band.height; x < band.right; x += 6) {
       canvas.drawLine(
@@ -748,7 +752,7 @@ class _HashPainter extends CustomPainter {
 
   @override
   bool shouldRepaint(covariant _HashPainter old) =>
-      old.overtime != overtime ||
+      old.tone != tone ||
       old.clock.breakAt != clock.breakAt ||
       old.clock.breakHours != clock.breakHours;
 }
