@@ -149,7 +149,12 @@ class ClockHours {
   (double, double) get breakBand {
     final span = outHour - inHour;
     if (span <= 0 || !hasBreak) return (0, 0);
-    final at = ((breakAt - 0.25 - inHour) / span).clamp(0.0, 1.0);
+    // ⚠️ **Centred on [breakAt] using the real length.** The half-width was
+    // hardcoded to 0.25 — right only while every break was assumed to be half
+    // an hour, which is what it was ported from. Against a variable length a
+    // 45-minute break sat seven and a half minutes early, so the mark and the
+    // caption disagreed about the same break.
+    final at = ((breakAt - breakHours / 2 - inHour) / span).clamp(0.0, 1.0);
     return (at, (breakHours / span).clamp(0.0, 1.0 - at));
   }
 
