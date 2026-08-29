@@ -14,7 +14,6 @@ library;
 
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:rx_scheduler/models.dart';
 import 'package:rx_scheduler/scheduler.dart';
 import 'package:rx_scheduler/widgets/chrome.dart';
 
