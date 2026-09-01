@@ -4,7 +4,19 @@ publish_to: "none"
 version: 1.1.0+1
 
 environment:
-  sdk: ^3.13.1
+  # ⚠️ Match RepairX's floor, not the SDK this package happened to be authored
+  # on. It pinned ^3.13.1 and nothing here needs it — the package depends on
+  # `flutter` alone and uses no post-3.8 language feature. RepairX runs Dart
+  # 3.12.2 (Flutter 3.44.9) and its Appwrite Sites build declares
+  # `flutter-3.44`, so ^3.13.1 made `flutter pub get` fail outright for the
+  # one consumer: "version solving failed ... Try using the Flutter SDK
+  # version: 3.47.2". A constraint above the consumer's runtime is not a
+  # safety margin, it is an outage.
+  #
+  # Raise it only alongside a language feature that actually needs it, and
+  # move RepairX's `appwrite.json` buildRuntime and `pr-checks.yml` pin in the
+  # same change.
+  sdk: ^3.8.1
 
 dependencies:
   flutter:
