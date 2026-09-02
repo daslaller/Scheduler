@@ -29,14 +29,17 @@ dev_dependencies:
 
 flutter:
   uses-material-design: true
-  fonts:
-    - family: Inter
-      fonts:
-        - asset: assets/fonts/Inter-Regular.ttf
-          weight: 400
-        - asset: assets/fonts/Inter-Medium.ttf
-          weight: 500
-        - asset: assets/fonts/Inter-SemiBold.ttf
-          weight: 600
-        - asset: assets/fonts/Inter-Bold.ttf
-          weight: 700
+  # ⚠️ No `fonts:` block, on purpose (owner, 2026-09-01). Flutter bundles every
+  # font a dependency declares into the consuming app, with no opt-out, so the
+  # four Inter faces this used to declare shipped into RepairX's web build as
+  # `packages/rx_scheduler/Inter` — 1.30 MB of unsubsetted Inter beside the
+  # app's own subsetted five, and nothing referenced them: `Wb.sans` is the
+  # bare family name 'Inter', which inside a package resolves to the HOST
+  # app's `Inter`, not to `packages/rx_scheduler/Inter`. Dead weight, at
+  # nearly twice what RepairX's font subsetting (#412) had just saved.
+  #
+  # This is a drop-in for RepairX and RepairX supplies Inter. Standalone, the
+  # demo in lib/main.dart renders in the platform default; the screenshot
+  # harness is unaffected because it loads assets/fonts/ off disk through
+  # `FontLoader` itself. Declare a family here again only if this package is
+  # ever consumed by an app that does not ship Inter — and subset it first.
