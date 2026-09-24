@@ -47,25 +47,17 @@ scheduler.clockOut(staffId);
 
 - **Day bench** — previous / next / Today
 - **KPI strip** — clocked hours, utilisation, overtime, billable labour
-<<<<<<< HEAD
 - **Clocked time** — drag either end of a shift, or use − / ＋ to add or drop 30 minutes
+- **Clock in / Clock out** — technician sheet, or `controller.clockIn` / `clockOut`
 - **Repairs** — appointed jobs on the same time axis, shaded by the technician’s clocked band
-- **Now line** at 1:45p
+- **Now line** — live when you pass `now: DateTime.now`
 - **Bench coverage** chart (dashed line = 4-tech walk-in SLA)
 - **Technician sheet** — clock in/out steppers, week load, appointed work
 - **Month overlay** — Hours / Crew / Approval lenses, opened as a **modal**
   (the route owns Escape, the back button and the scrim)
 - **My schedule** — one technician's week, a row per day, reusing the same
   month overlay projected onto that person
-=======
-- **Clocked time** — drag either end of a shift, or − / ＋ for 30 minutes
-- **Clock in / Clock out** — technician sheet, or `controller.clockIn` / `clockOut`
-- **Repairs** — appointed jobs on the same time axis
-- **Now line** — live when you pass `now: DateTime.now`
-- **Bench coverage** — dashed line is the 4-tech walk-in SLA
-- **Month overlay** — Hours / Crew / Approval lenses
 - **Overlay toasts** — `RxToastHost` above the navigator
->>>>>>> origin/main
 
 The demo (this app’s `main.dart`) freezes Monday 24 August 2026 at 1:45p.
 
@@ -89,7 +81,6 @@ flutter test
 flutter analyze
 ```
 
-<<<<<<< HEAD
 ## The honesty rules
 
 Four things the board refuses to do, each because getting it wrong costs
@@ -113,10 +104,7 @@ Screens are photographed rather than described:
 flutter test test/screens_screenshot_test.dart   # build/shots/*.png
 ```
 
-## Mockup
-=======
 ## Design
->>>>>>> origin/main
 
 Workbench calendar layout, restyled with **Rail** (RepairX) light tokens:
 Inter, blue-on-slate, hairline cards. Purple is reserved for AI and is not
